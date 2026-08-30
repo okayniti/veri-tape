@@ -7,6 +7,16 @@ calibrator (Platt / sigmoid, or isotonic regression) and reports Brier
 score before/after plus a reliability diagram, because a reviewer-facing
 probability that isn't actually a probability is worse than not showing one.
 
+Default method is Platt (sigmoid), not isotonic, despite isotonic scoring a
+touch better on this run's Brier score (0.044 vs 0.046) -- the calibration
+holdout is only ~600 loans with ~40 positives, and isotonic regression's
+step function ends up with ~19 plateaus at that sample size. A plateau
+boundary sitting between "before" and "after" a small scenario shock (see
+scenario/simulate.py) makes a probability jump by 0.3+ on a marginal input
+change, which is a calibration-estimation artifact, not a real risk signal.
+Platt's smooth sigmoid degrades that failure mode into a small, monotonic
+shift instead.
+
 Leakage discipline: the calibration mapping is fit on a holdout carved out
 of the *train* split (via the same time-aware split used everywhere else),
 using a freshly-trained XGBoost that never saw that holdout -- never on the
@@ -26,11 +36,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.calibration import calibration_curve
-from sklearn.isotonic import IsotonicRegression
-from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import brier_score_loss
 
 from loan_intelligence.features.time_split import time_aware_split
+from loan_intelligence.models.calibrators import IsotonicCalibrator, PlattCalibrator
 from loan_intelligence.models.predict import get_feature_cols, predict_xgboost, train_xgboost
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -38,35 +47,7 @@ OUTPUT_DIR = BASE_DIR / "outputs"
 REPORT_DIR = BASE_DIR / "reports"
 
 
-class PlattCalibrator:
-    def __init__(self):
-        self.lr = LogisticRegression()
-
-    def fit(self, raw_proba: np.ndarray, y: np.ndarray) -> "PlattCalibrator":
-        eps = 1e-6
-        logit = np.log(np.clip(raw_proba, eps, 1 - eps) / np.clip(1 - raw_proba, eps, 1 - eps)).reshape(-1, 1)
-        self.lr.fit(logit, y)
-        return self
-
-    def predict(self, raw_proba: np.ndarray) -> np.ndarray:
-        eps = 1e-6
-        logit = np.log(np.clip(raw_proba, eps, 1 - eps) / np.clip(1 - raw_proba, eps, 1 - eps)).reshape(-1, 1)
-        return self.lr.predict_proba(logit)[:, 1]
-
-
-class IsotonicCalibrator:
-    def __init__(self):
-        self.iso = IsotonicRegression(out_of_bounds="clip")
-
-    def fit(self, raw_proba: np.ndarray, y: np.ndarray) -> "IsotonicCalibrator":
-        self.iso.fit(raw_proba, y)
-        return self
-
-    def predict(self, raw_proba: np.ndarray) -> np.ndarray:
-        return self.iso.predict(raw_proba)
-
-
-def fit_calibrator(train_df: pd.DataFrame, method: str = "isotonic"):
+def fit_calibrator(train_df: pd.DataFrame, method: str = "platt"):
     calib_fit_df, calib_holdout_df, _ = time_aware_split(train_df, test_size=0.15)
     feature_cols = get_feature_cols(calib_fit_df)
 
@@ -106,7 +87,7 @@ def main() -> None:
     raw_proba_test = predictions_test["xgb_proba"].to_numpy()
 
     print("fitting calibrator on a train-only holdout (never touches test)...")
-    calibrator = fit_calibrator(train_df, method="isotonic")
+    calibrator = fit_calibrator(train_df, method="platt")
     calibrated_proba_test = calibrator.predict(raw_proba_test)
 
     brier_before = brier_score_loss(y_test, raw_proba_test)
@@ -128,7 +109,7 @@ def main() -> None:
     out.to_csv(out_path, index=False)
 
     report = {
-        "method": "isotonic",
+        "method": "platt",
         "brier_before": round(float(brier_before), 4),
         "brier_after": round(float(brier_after), 4),
         "improvement_pct": round(float(improvement), 2),
