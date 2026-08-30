@@ -38,7 +38,7 @@ OUTPUT_DIR = BASE_DIR / "outputs"
 
 load_dotenv(BASE_DIR / ".env")
 
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-3.6-flash"
 
 SYSTEM_PROMPT = (
     "You are assisting a human loan-portfolio reviewer. You will be given numbers "
@@ -111,8 +111,14 @@ def generate_reviewer_note(facts: dict, model: str = DEFAULT_MODEL, dry_run: boo
         contents=json.dumps(facts, indent=2),
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_PROMPT,
-            max_output_tokens=400,
+            max_output_tokens=1024,
             temperature=0.3,
+            # This is short narration, not a reasoning task -- keep thinking
+            # minimal. Without this, gemini-3.6-flash's thinking tokens (not
+            # separately budgeted) can consume the entire max_output_tokens
+            # before any visible text is produced, truncating the response
+            # to a few words with no error raised.
+            thinking_config=types.ThinkingConfig(thinking_level="MINIMAL"),
         ),
     )
     return (response.text or "").strip()
