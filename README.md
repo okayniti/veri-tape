@@ -58,7 +58,7 @@ so the git history is one working stage per commit rather than one big drop.
 | Calibrated probability | Platt scaling fit on a held-out slice of train, evaluated by Brier score |
 | Feature attributions | SHAP (`TreeExplainer` for XGBoost, `GradientExplainer` for the autoencoder) |
 | Scenario shift | The same XGBoost model + calibrator, rescored on shocked features |
-| Reviewer note | Claude, given the numbers above as fixed input — narration only |
+| Reviewer note | Gemini, given the numbers above as fixed input — narration only |
 | Audit record | SHA-256 hash chain over every one of the above, in SQLite |
 
 ## Judged-criteria mapping
@@ -101,7 +101,9 @@ across 1–5% alert budgets on the held-out test set.
 pip install -r requirements.txt
 ```
 
-Set `ANTHROPIC_API_KEY` to get live LLM narration; without it,
+For live LLM narration (Google Gemini, via the `google-genai` SDK), copy
+`.env.example` to `.env` and paste your key in as `GOOGLE_API_KEY=...`
+(`.env` is gitignored, so it's never committed). Without a key set,
 `review/narrate.py` and `demo.py` fall back to a deterministic,
 clearly-labeled template so the rest of the pipeline still demos end to end.
 

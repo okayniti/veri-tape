@@ -150,7 +150,7 @@ with tab_record:
         facts["top_anomaly_drivers"] = top_anomaly
 
     if st.button("Generate reviewer note"):
-        with st.spinner("asking Claude (or using the template fallback if no API key is set)..."):
+        with st.spinner("asking Gemini (or using the template fallback if no API key is set)..."):
             note = generate_reviewer_note(facts, model=DEFAULT_MODEL)
         st.info(note)
         AuditTrail().log("llm_narration", loan_id, {"note": note})

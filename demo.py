@@ -9,7 +9,7 @@ not a lookup table dressed up as one.
 
 Run: `python demo.py` (auto-picks an interesting record) or
      `python demo.py --loan-id L100000` (pick one yourself)
-     `python demo.py --dry-run` (skip the live Anthropic API call)
+     `python demo.py --dry-run` (skip the live Gemini API call)
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from loan_intelligence.explain.shap_explain import AnomalyExplainer, PredictionE
 from loan_intelligence.models.anomaly import STATIC_COLS as ANOMALY_STATIC_COLS
 from loan_intelligence.models.anomaly import GRUMLPAutoencoder, score_anomalies
 from loan_intelligence.models.predict import _as_xgb_frame
-from loan_intelligence.review.narrate import DEFAULT_MODEL, generate_reviewer_note
+from loan_intelligence.review.narrate import DEFAULT_MODEL, _has_gemini_key, generate_reviewer_note
 
 BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = BASE_DIR / "outputs"
@@ -124,7 +124,8 @@ def run_demo(loan_id: str, dry_run: bool = False, model_name: str = DEFAULT_MODE
         facts["top_anomaly_drivers"] = top_anomaly
     note = generate_reviewer_note(facts, model=model_name, dry_run=dry_run)
     print(f"  {note}")
-    trail.log("llm_narration", loan_id, {"note": note, "model": model_name if not dry_run else "template_fallback"})
+    used_live_model = model_name if (not dry_run and _has_gemini_key()) else "template_fallback"
+    trail.log("llm_narration", loan_id, {"note": note, "model": used_live_model})
 
     print("\n[5/5] Audit trail")
     verification = trail.verify()
@@ -144,7 +145,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run one loan through the full loan-intelligence pipeline.")
     parser.add_argument("--loan-id", default=None, help="defaults to an auto-picked interesting record")
     parser.add_argument("--model", default=DEFAULT_MODEL)
-    parser.add_argument("--dry-run", action="store_true", help="skip the live Anthropic API call")
+    parser.add_argument("--dry-run", action="store_true", help="skip the live Gemini API call")
     args = parser.parse_args()
 
     loan_id = args.loan_id or pick_interesting_loan_id()

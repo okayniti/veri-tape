@@ -3,7 +3,7 @@
 Hard separation from the modeling pipeline: this module receives numbers
 that are already final (a calibrated probability from models/calibrate.py,
 SHAP attributions from explain/shap_explain.py, an anomaly score from
-models/anomaly.py) and asks Claude to phrase them for a human reviewer. The
+models/anomaly.py) and asks Gemini to phrase them for a human reviewer. The
 system prompt explicitly forbids inventing numbers or second-guessing the
 figures it's given, and nothing in this module ever writes back to a
 prediction, a feature, or a model file -- it only ever produces a text note
@@ -12,10 +12,12 @@ judged capability (prediction, anomaly detection, calibration, SHAP,
 scenario simulation) still works exactly as before; that's what makes this
 narration rather than an "LLM wrapper" around the actual modeling.
 
-Falls back to a deterministic template (no API call) when ANTHROPIC_API_KEY
-is unset, clearly labeled as such -- lets the rest of the pipeline demo
-end-to-end without a live key, while the real path is a normal
-`client.messages.create()` call.
+Falls back to a deterministic template (no API call) when neither
+GOOGLE_API_KEY nor GEMINI_API_KEY is set, clearly labeled as such -- lets
+the rest of the pipeline demo end-to-end without a live key, while the real
+path is a normal `client.models.generate_content()` call via the `google-
+genai` SDK. Reads a `.env` file at the repo root if present (python-dotenv)
+so the key doesn't have to be re-exported into the shell every session.
 
 Run directly: `python -m loan_intelligence.review.narrate --loan-id L100000`
 """
@@ -27,13 +29,16 @@ import os
 from pathlib import Path
 
 import pandas as pd
+from dotenv import load_dotenv
 
 from loan_intelligence.audit.hash_chain import AuditTrail
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 OUTPUT_DIR = BASE_DIR / "outputs"
 
-DEFAULT_MODEL = "claude-opus-5"
+load_dotenv(BASE_DIR / ".env")
+
+DEFAULT_MODEL = "gemini-2.5-flash"
 
 SYSTEM_PROMPT = (
     "You are assisting a human loan-portfolio reviewer. You will be given numbers "
@@ -80,7 +85,7 @@ def gather_facts(loan_id: str, pred_explainer, anomaly_explainer=None) -> dict:
 def _template_fallback(facts: dict) -> str:
     top_driver = facts["top_prediction_drivers"][0]
     note = (
-        f"[template fallback -- ANTHROPIC_API_KEY not set] Loan {facts['loan_id']}: calibrated default "
+        f"[template fallback -- no GOOGLE_API_KEY/GEMINI_API_KEY set] Loan {facts['loan_id']}: calibrated default "
         f"probability {facts['calibrated_probability']:.0%}, most influenced by {top_driver['feature']} "
         f"(value {top_driver['value']}, SHAP {top_driver['shap_value']:+.3f})."
     )
@@ -89,30 +94,38 @@ def _template_fallback(facts: dict) -> str:
     return note
 
 
+def _has_gemini_key() -> bool:
+    return bool(os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY"))
+
+
 def generate_reviewer_note(facts: dict, model: str = DEFAULT_MODEL, dry_run: bool = False) -> str:
-    if dry_run or not os.environ.get("ANTHROPIC_API_KEY"):
+    if dry_run or not _has_gemini_key():
         return _template_fallback(facts)
 
-    import anthropic
+    from google import genai
+    from google.genai import types
 
-    client = anthropic.Anthropic()
-    response = client.messages.create(
+    client = genai.Client()  # reads GOOGLE_API_KEY, else GEMINI_API_KEY, from the environment
+    response = client.models.generate_content(
         model=model,
-        max_tokens=400,
-        system=SYSTEM_PROMPT,
-        output_config={"effort": "low"},
-        messages=[{"role": "user", "content": json.dumps(facts, indent=2)}],
+        contents=json.dumps(facts, indent=2),
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+            max_output_tokens=400,
+            temperature=0.3,
+        ),
     )
-    return next((b.text for b in response.content if b.type == "text"), "").strip()
+    return (response.text or "").strip()
 
 
 def narrate_loan(loan_id: str, pred_explainer, anomaly_explainer=None, model: str = DEFAULT_MODEL, dry_run: bool = False) -> dict:
     facts = gather_facts(loan_id, pred_explainer, anomaly_explainer)
     note = generate_reviewer_note(facts, model=model, dry_run=dry_run)
+    used_live_model = model if (not dry_run and _has_gemini_key()) else "template_fallback"
 
     AuditTrail().log(
         "llm_narration", loan_id,
-        {"note": note, "model": model if not dry_run else "template_fallback", "facts_used": facts},
+        {"note": note, "model": used_live_model, "facts_used": facts},
     )
     return {"loan_id": loan_id, "note": note, "facts": facts}
 
