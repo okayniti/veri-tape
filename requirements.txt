@@ -1,0 +1,10 @@
+numpy>=1.26
+pandas>=2.1
+scikit-learn>=1.4
+xgboost>=2.0
+torch>=2.2
+shap>=0.45
+matplotlib>=3.8
+jinja2>=3.1
+anthropic>=0.34
+streamlit>=1.35

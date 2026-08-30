@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+# generated artifacts (regenerable from code)
+outputs/*.csv
+outputs/*.parquet
+outputs/*.png
+outputs/*.db
+reports/*.html
+*.pt
+*.pkl
+*.joblib
+
+.env
+.DS_Store
