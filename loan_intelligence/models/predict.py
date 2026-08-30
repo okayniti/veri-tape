@@ -50,7 +50,7 @@ np.random.seed(cfg.RANDOM_SEED)
 # Shared data loading
 # ---------------------------------------------------------------------------
 
-def _feature_cols(df: pd.DataFrame) -> list[str]:
+def get_feature_cols(df: pd.DataFrame) -> list[str]:
     return [c for c in df.columns if c not in LEAKY_OR_ID_COLS]
 
 
@@ -226,7 +226,7 @@ def train_logistic_baseline(train_df: pd.DataFrame) -> tuple[LogisticRegression,
 def main() -> None:
     train_df = pd.read_csv(OUTPUT_DIR / "train.csv")
     test_df = pd.read_csv(OUTPUT_DIR / "test.csv")
-    feature_cols = _feature_cols(train_df)
+    feature_cols = get_feature_cols(train_df)
 
     y_train, y_test = train_df[TARGET].to_numpy(), test_df[TARGET].to_numpy()
 
