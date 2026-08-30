@@ -5,11 +5,8 @@ venv/
 env/
 .ipynb_checkpoints/
 
-# generated artifacts (regenerable from code)
-outputs/*.csv
-outputs/*.parquet
-outputs/*.png
-outputs/*.db
+# generated artifacts (regenerable from code + fixed seed)
+outputs/
 reports/*.html
 *.pt
 *.pkl
