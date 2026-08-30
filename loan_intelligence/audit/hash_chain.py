@@ -135,7 +135,13 @@ def _tamper_row(db_path: Path, row_id: int) -> None:
 
 
 def main() -> None:
-    trail = AuditTrail()
+    # Uses a separate, throwaway DB for this self-contained demo (including
+    # the deliberate tamper below) so it never poisons outputs/audit_trail.db,
+    # the trail that real pipeline runs (scenario/simulate.py,
+    # review/narrate.py, demo.py) actually append to.
+    demo_db_path = OUTPUT_DIR / "audit_trail_demo.db"
+    demo_db_path.unlink(missing_ok=True)
+    trail = AuditTrail(db_path=demo_db_path)
 
     predictions = pd.read_csv(OUTPUT_DIR / "predictions_test_calibrated.csv").head(3)
     anomalies = pd.read_csv(OUTPUT_DIR / "anomaly_scores_test.csv").sort_values("anomaly_score", ascending=False).head(2)
