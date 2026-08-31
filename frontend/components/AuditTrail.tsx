@@ -71,14 +71,14 @@ export default function AuditTrailSection() {
         const node = nodeRefs.current.get(entry.id);
 
         if (link) {
-          tl.to(link, { backgroundColor: isBroken ? "var(--danger)" : "var(--accent)", duration: 0.25 }, i * 0.12);
+          tl.to(link, { backgroundColor: isBroken ? "var(--danger)" : "var(--success)", duration: 0.25 }, i * 0.12);
         }
         if (node) {
           tl.to(
             node,
             {
-              borderColor: isBroken ? "var(--danger)" : "var(--accent)",
-              boxShadow: isBroken ? "0 0 0 4px rgba(241,97,88,0.15)" : "0 0 0 4px rgba(45,212,191,0.15)",
+              borderColor: isBroken ? "var(--danger)" : "var(--success)",
+              boxShadow: isBroken ? "0 0 0 4px var(--shadow-danger-glow)" : "0 0 0 4px var(--shadow-success-glow)",
               duration: 0.25,
             },
             i * 0.12
@@ -93,12 +93,12 @@ export default function AuditTrailSection() {
   }
 
   return (
-    <section id="audit" className="mx-auto max-w-3xl px-6 py-24">
+    <section id="audit" className="mx-auto max-w-3xl px-6 py-28">
       <Reveal>
         <h2 className="text-xs uppercase tracking-[0.3em] text-muted">Audit Trail</h2>
       </Reveal>
       <Reveal delay={0.05}>
-        <p className="mt-2 max-w-xl text-2xl text-foreground">
+        <p className="mt-2 max-w-xl text-3xl text-foreground sm:text-4xl">
           Every model decision, hash-chained. Tamper with any entry and the chain visibly breaks.
         </p>
       </Reveal>
@@ -107,7 +107,7 @@ export default function AuditTrailSection() {
         <button
           onClick={handleVerify}
           disabled={verifying}
-          className="mt-8 rounded bg-accent px-6 py-2 text-xs uppercase tracking-wide text-accent-foreground transition hover:opacity-90 disabled:opacity-40"
+          className="mt-8 rounded-md bg-accent px-6 py-2 text-xs uppercase tracking-wide text-accent-foreground transition hover:bg-accent-hover disabled:opacity-40"
         >
           {verifying ? "Verifying…" : "Verify chain"}
         </button>
@@ -118,7 +118,7 @@ export default function AuditTrailSection() {
       {verifyResult && (
         <Reveal delay={0.05} className="mt-6">
           {verifyResult.valid ? (
-            <p className="text-sm text-accent">✓ Chain valid — {verifyResult.n_entries} entries verified end to end.</p>
+            <p className="text-sm text-success">✓ Chain valid — {verifyResult.n_entries} entries verified end to end.</p>
           ) : (
             <p className="text-sm text-danger">
               ✗ Chain broken at entry #{verifyResult.broken_at_id} — {verifyResult.reason}
@@ -149,7 +149,7 @@ export default function AuditTrailSection() {
                   ref={(el) => {
                     if (el) nodeRefs.current.set(entry.id, el);
                   }}
-                  className="flex items-start gap-4 rounded-lg border border-border bg-background-raised p-4 transition-[border-color,box-shadow] duration-300"
+                  className="flex items-start gap-4 rounded-xl border border-border bg-background-raised p-4 transition-[border-color,box-shadow] duration-300"
                 >
                   <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border font-mono text-xs text-muted">
                     {entry.id}

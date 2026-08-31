@@ -67,12 +67,12 @@ export default function FaqAccordion() {
   }
 
   return (
-    <section id="faq" className="mx-auto max-w-3xl px-6 py-24">
+    <section id="faq" className="mx-auto max-w-3xl px-6 py-28">
       <Reveal>
         <h2 className="text-xs uppercase tracking-[0.3em] text-muted">FAQ</h2>
       </Reveal>
       <Reveal delay={0.05}>
-        <p className="mt-2 max-w-xl text-2xl text-foreground">Questions a compliance or servicing team would actually ask.</p>
+        <p className="mt-2 max-w-xl text-3xl text-foreground sm:text-4xl">Questions a compliance or servicing team would actually ask.</p>
       </Reveal>
 
       <div className="mt-10 divide-y divide-border border-y border-border">

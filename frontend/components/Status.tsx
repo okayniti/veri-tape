@@ -1,12 +1,12 @@
 export function ErrorPanel({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
-    <div className="rounded-lg border border-danger/30 bg-danger/5 p-6 text-sm">
+    <div className="rounded-xl border border-danger/30 bg-danger/5 p-6 text-sm">
       <p className="font-medium text-danger">Couldn&apos;t load this data</p>
       <p className="mt-1 text-muted">{message}</p>
       {onRetry && (
         <button
           onClick={onRetry}
-          className="mt-4 rounded border border-accent/40 px-3 py-1.5 text-xs uppercase tracking-wide text-accent transition hover:bg-accent hover:text-accent-foreground"
+          className="mt-4 rounded-md border border-accent/40 px-3 py-1.5 text-xs uppercase tracking-wide text-accent transition hover:bg-accent hover:text-accent-foreground"
         >
           Retry
         </button>

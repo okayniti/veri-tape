@@ -54,18 +54,18 @@ const CAPABILITIES: Capability[] = [
 
 export default function CapabilityGrid() {
   return (
-    <section id="capabilities" className="mx-auto max-w-5xl px-6 py-24">
+    <section id="capabilities" className="mx-auto max-w-5xl px-6 py-28">
       <Reveal>
         <h2 className="text-xs uppercase tracking-[0.3em] text-muted">Capabilities</h2>
       </Reveal>
       <Reveal delay={0.05}>
-        <p className="mt-2 max-w-xl text-2xl text-foreground">What's actually running underneath.</p>
+        <p className="mt-2 max-w-xl text-3xl text-foreground sm:text-4xl">What's actually running underneath.</p>
       </Reveal>
 
       <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-4 sm:[grid-auto-flow:dense] sm:auto-rows-[160px]">
         {CAPABILITIES.map((cap, i) => (
           <Reveal key={cap.label} delay={i * 0.05} className={cap.span}>
-            <div className="group flex h-full flex-col justify-between rounded-lg border border-border bg-background-raised p-6 transition-all duration-300 hover:-translate-y-1 hover:border-accent/40 hover:shadow-[0_12px_30px_-12px_rgba(45,212,191,0.25)]">
+            <div className="group flex h-full flex-col justify-between rounded-xl border border-border bg-background-raised p-6 shadow-[0_8px_24px_-16px_var(--shadow-color)] transition-all duration-300 hover:-translate-y-1 hover:border-accent/40 hover:shadow-[0_12px_30px_-12px_var(--shadow-accent-glow)]">
               <p className="text-sm font-medium text-foreground">{cap.label}</p>
               <p className="mt-2 text-xs leading-relaxed text-muted">{cap.description}</p>
             </div>

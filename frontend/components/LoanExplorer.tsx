@@ -10,7 +10,7 @@ import LoanDetailPanel from "./LoanDetailPanel";
 const PAGE_SIZE = 12;
 
 function riskBadgeClass(tier: string): string {
-  if (tier === "high") return "bg-accent text-accent-foreground";
+  if (tier === "high") return "bg-danger text-danger-foreground";
   if (tier === "medium") return "border border-accent/50 text-accent";
   return "border border-border text-muted";
 }
@@ -62,15 +62,15 @@ export default function LoanExplorer({ regions, loanTypes }: { regions: string[]
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
 
   const selectClass =
-    "rounded border border-border bg-background-raised px-3 py-2 text-xs uppercase tracking-wide text-foreground focus:border-accent focus:outline-none";
+    "rounded-md border border-border bg-background-raised px-3 py-2 text-xs uppercase tracking-wide text-foreground focus:border-accent focus:outline-none";
 
   return (
-    <section id="loans" className="mx-auto max-w-6xl px-6 py-24">
+    <section id="loans" className="mx-auto max-w-6xl px-6 py-28">
       <Reveal>
         <h2 className="text-xs uppercase tracking-[0.3em] text-muted">Loan Explorer</h2>
       </Reveal>
       <Reveal delay={0.05}>
-        <p className="mt-2 max-w-xl text-2xl text-foreground">
+        <p className="mt-2 max-w-xl text-3xl text-foreground sm:text-4xl">
           Every loan in the current book, filterable by risk, region, and status.
         </p>
       </Reveal>

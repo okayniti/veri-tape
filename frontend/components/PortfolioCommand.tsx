@@ -108,7 +108,7 @@ export default function PortfolioCommand({
           <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
             {summary.risk_tier_breakdown.map((tier, i) => (
               <Reveal key={tier.tier} delay={i * 0.08}>
-                <div className="rounded-lg border border-border bg-background-raised p-6">
+                <div className="rounded-xl border border-border bg-background-raised p-6">
                   <p className="text-xs uppercase tracking-wide text-muted">{RISK_TIER_LABEL[tier.tier] ?? tier.tier}</p>
                   <p className="mt-2 font-mono text-3xl text-foreground">{tier.count}</p>
                   <p className="mt-1 text-xs text-muted">{tier.pct_of_portfolio.toFixed(1)}% of portfolio</p>
@@ -119,7 +119,7 @@ export default function PortfolioCommand({
 
           <div className="mt-16 grid grid-cols-1 gap-8 sm:grid-cols-3">
             <Reveal delay={0.1}>
-              <div className="rounded-lg border border-border bg-background-raised p-6">
+              <div className="rounded-xl border border-border bg-background-raised p-6">
                 <p className="text-xs uppercase tracking-wide text-muted">Flagged loans</p>
                 <p className="mt-2 font-mono text-3xl text-foreground">
                   <CountUp value={summary.flagged_loan_count} triggerOnScroll />
@@ -128,7 +128,7 @@ export default function PortfolioCommand({
               </div>
             </Reveal>
             <Reveal delay={0.13}>
-              <div className="rounded-lg border border-border bg-background-raised p-6">
+              <div className="rounded-xl border border-border bg-background-raised p-6">
                 <p className="text-xs uppercase tracking-wide text-muted">Anomaly rate</p>
                 <p className="mt-2 font-mono text-3xl text-foreground">
                   <CountUp value={summary.anomaly.overall_rate} formatter={formatPercent} triggerOnScroll />
@@ -137,7 +137,7 @@ export default function PortfolioCommand({
               </div>
             </Reveal>
             <Reveal delay={0.16}>
-              <div className="rounded-lg border border-border bg-background-raised p-6">
+              <div className="rounded-xl border border-border bg-background-raised p-6">
                 <p className="text-xs uppercase tracking-wide text-muted">Reviewer override rate</p>
                 {summary.reviewer.n_reviews === 0 ? (
                   <p className="mt-2 text-sm text-muted">No reviews logged yet</p>
@@ -166,7 +166,7 @@ export default function PortfolioCommand({
 
           {summary.scenario_comparison && (
             <Reveal delay={0.1} className="mt-16">
-              <div className="rounded-lg border border-accent/25 bg-accent/5 p-6">
+              <div className="rounded-xl border border-accent/25 bg-accent/5 p-6">
                 <p className="text-xs uppercase tracking-wide text-muted">
                   Latest scenario · {summary.scenario_comparison.scenario_file}
                 </p>
@@ -185,7 +185,7 @@ export default function PortfolioCommand({
                   </div>
                   <div>
                     <p className="text-xs text-muted">Delta</p>
-                    <p className={`font-mono text-xl ${summary.scenario_comparison.delta >= 0 ? "text-danger" : "text-accent"}`}>
+                    <p className={`font-mono text-xl ${summary.scenario_comparison.delta >= 0 ? "text-danger" : "text-success"}`}>
                       {summary.scenario_comparison.delta >= 0 ? "+" : ""}
                       {formatCurrency(summary.scenario_comparison.delta)}
                     </p>

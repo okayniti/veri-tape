@@ -1,29 +1,48 @@
 @import "tailwindcss";
 
 :root {
-  --background: #08090b;
-  --background-raised: #0f1114;
-  --foreground: #f2f3f5;
-  --muted: #8b9099;
-  --border: #1c1f24;
+  --background: #14110e;
+  --background-raised: #1c1815;
+  --background-elevated: #241f1a;
+  --foreground: #f5ede4;
+  --muted: #b8afa3;
+  --border: #2e2822;
 
-  /* The one accent color -- every interactive element, link, active state,
-     and the audit-chain visualization uses this and nothing else. Red is
-     reserved exclusively for the broken-chain failure state. */
-  --accent: #2dd4bf;
-  --accent-foreground: #04120f;
-  --danger: #f16158;
+  /* Accent stays the one interactive/brand color (buttons, links, badges,
+     the marquee, progress fills). success/danger are separate semantic
+     colors for genuinely good/bad states (audit valid vs. broken, a
+     scenario's loss decreasing vs. increasing, risk tier) -- not
+     interactive elements competing with the accent. */
+  --accent: #f4a261;
+  --accent-hover: #f7b885;
+  --accent-foreground: #14110e;
+  --success: #8fbc8f;
+  --success-foreground: #14110e;
+  --danger: #e07856;
+  --danger-foreground: #14110e;
+
+  /* Warm-tinted shadows (bg-primary at low alpha) instead of neutral gray,
+     plus a matching glow per semantic color for hover/active states. */
+  --shadow-color: rgba(20, 17, 14, 0.45);
+  --shadow-accent-glow: rgba(244, 162, 97, 0.22);
+  --shadow-success-glow: rgba(143, 188, 143, 0.2);
+  --shadow-danger-glow: rgba(224, 120, 86, 0.22);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-background-raised: var(--background-raised);
+  --color-background-elevated: var(--background-elevated);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-border: var(--border);
   --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
   --color-accent-foreground: var(--accent-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
   --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }

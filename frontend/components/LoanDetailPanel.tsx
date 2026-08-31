@@ -183,7 +183,7 @@ export default function LoanDetailPanel({
                 <span
                   className={`rounded-full px-2 py-0.5 ${
                     detail.risk_tier === "high"
-                      ? "bg-accent text-accent-foreground"
+                      ? "bg-danger text-danger-foreground"
                       : detail.risk_tier === "medium"
                         ? "border border-accent/50 text-accent"
                         : "border border-border text-muted"
@@ -207,7 +207,7 @@ export default function LoanDetailPanel({
             {detail.top_anomaly_drivers && <ShapBarList title="Top anomaly drivers" drivers={detail.top_anomaly_drivers} />}
 
             {detail.is_flagged ? (
-              <div className="rounded-lg border border-accent/30 bg-accent/5 p-5">
+              <div className="rounded-xl border border-accent/30 bg-accent/5 p-5">
                 <p className="text-xs uppercase tracking-wide text-accent">Reviewer action</p>
                 {reviewResult ? (
                   <div className="mt-4 space-y-3">
@@ -218,7 +218,7 @@ export default function LoanDetailPanel({
                       This entry is hash-chained to the exact flag it responds to — the record below is what makes it
                       auditable, not the decision text alone.
                     </p>
-                    <div className="space-y-1.5 rounded border border-border bg-background p-3 font-mono text-[11px] leading-relaxed text-muted">
+                    <div className="space-y-1.5 rounded-md border border-border bg-background p-3 font-mono text-[11px] leading-relaxed text-muted">
                       <p className="break-all">
                         references_hash → <span className="text-accent">{reviewResult.references_hash}</span>
                       </p>
@@ -234,21 +234,21 @@ export default function LoanDetailPanel({
                       onChange={(e) => setReason(e.target.value)}
                       placeholder="Optional reason…"
                       rows={2}
-                      className="mt-3 w-full resize-none rounded border border-border bg-background-raised p-2 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none"
+                      className="mt-3 w-full resize-none rounded-md border border-border bg-background-raised p-2 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none"
                     />
                     {reviewError && <p className="mt-2 text-xs text-danger">{reviewError}</p>}
                     <div className="mt-3 flex gap-3">
                       <button
                         disabled={!!submitting}
                         onClick={() => handleDecision("accept")}
-                        className="rounded border border-border px-4 py-2 text-xs uppercase tracking-wide text-foreground transition hover:border-accent hover:text-accent disabled:opacity-40"
+                        className="rounded-md border border-border px-4 py-2 text-xs uppercase tracking-wide text-foreground transition hover:border-accent hover:text-accent disabled:opacity-40"
                       >
                         {submitting === "accept" ? "Logging…" : "Accept"}
                       </button>
                       <button
                         disabled={!!submitting}
                         onClick={() => handleDecision("override")}
-                        className="rounded bg-accent px-4 py-2 text-xs uppercase tracking-wide text-accent-foreground transition hover:opacity-90 disabled:opacity-40"
+                        className="rounded-md bg-accent px-4 py-2 text-xs uppercase tracking-wide text-accent-foreground transition hover:bg-accent-hover disabled:opacity-40"
                       >
                         {submitting === "override" ? "Logging…" : "Override"}
                       </button>
