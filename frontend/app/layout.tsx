@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Nav from "@/components/Nav";
 import SmoothScrollProvider from "@/components/SmoothScrollProvider";
 import "./globals.css";
 
@@ -26,7 +27,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       data-theme="dark"
     >
       <body className="flex min-h-full flex-col bg-background text-foreground">
-        <SmoothScrollProvider>{children}</SmoothScrollProvider>
+        <SmoothScrollProvider>
+          <Nav />
+          {children}
+        </SmoothScrollProvider>
       </body>
     </html>
   );

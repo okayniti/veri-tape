@@ -77,7 +77,15 @@ export default function PortfolioCommand({
       <div ref={wrapRef} className="relative min-h-[150vh]">
         <div className="sticky top-0 flex h-screen flex-col items-center justify-center px-6 text-center">
           <div ref={contentRef}>
-            <p className="text-xs uppercase tracking-[0.35em] text-muted">Portfolio Command</p>
+            <span className="inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent/10 px-4 py-1.5 text-xs text-accent">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M12 15a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z" />
+                <path d="m9 12 2 2 4-4" />
+                <path d="M8.5 14.5 7 22l5-3 5 3-1.5-7.5" />
+              </svg>
+              AI Track — Intain FinTech Challenge 2026
+            </span>
+            <p className="mt-6 text-xs uppercase tracking-[0.35em] text-muted">Portfolio Command</p>
             {error ? (
               <div className="mx-auto mt-8 max-w-md">
                 <ErrorPanel message={error} onRetry={onRetry} />

@@ -36,7 +36,7 @@ export default function Home() {
     <>
       <Loader ready={summary !== null || summaryError !== null} onDone={handleLoaderDone} />
       <main
-        className="transition-opacity"
+        className="pt-16 transition-opacity"
         style={{ opacity: revealed ? 1 : 0, transitionDuration: `${DURATION.slow}s` }}
       >
         <PortfolioCommand summary={summary} error={summaryError} onRetry={loadSummary} />
