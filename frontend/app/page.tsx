@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import AuditTrailSection from "@/components/AuditTrail";
 import CapabilityGrid from "@/components/CapabilityGrid";
+import CoreCapabilities from "@/components/CoreCapabilities";
 import FaqAccordion from "@/components/FaqAccordion";
 import Loader from "@/components/Loader";
 import LoanExplorer from "@/components/LoanExplorer";
@@ -40,6 +41,7 @@ export default function Home() {
         style={{ opacity: revealed ? 1 : 0, transitionDuration: `${DURATION.slow}s` }}
       >
         <PortfolioCommand summary={summary} error={summaryError} onRetry={loadSummary} />
+        <CoreCapabilities />
         <CapabilityGrid />
         <LoanExplorer regions={regions} loanTypes={loanTypes} />
         <ScenarioSimulator />
