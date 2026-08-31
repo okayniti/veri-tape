@@ -1,4 +1,4 @@
-# Loan Intelligence — Intain FinTech Challenge 2026 (AI Track)
+# VeriTape — Intain FinTech Challenge 2026 (AI Track)
 
 Profile messy loan-level data, predict delinquency/default, detect
 structural anomalies, calibrate the probabilities, explain both models
@@ -17,6 +17,29 @@ call entirely and every other capability in this repo — prediction,
 anomaly detection, calibration, explainability, scenario simulation, the
 audit trail — still works exactly as before. That's the difference between
 narration and an "LLM wrapper."
+
+## Product
+
+VeriTape is an **auditable decision layer for loan servicing** — not a
+model demo. The prediction and anomaly-detection models are real, tested
+ML (see Results below), but the thing being pitched here is what wraps
+them: every automated flag and every human response to it becomes a
+permanent, tamper-evident record, and a manager gets a portfolio-level view
+of that record instead of only single-loan drilldowns.
+
+**Who'd use it:** loan servicers and their compliance/risk teams — the
+people who have to answer "why did we flag this loan, who reviewed it, and
+can you prove the record wasn't altered after the fact" during an audit or
+a regulatory exam, not just "what's our default rate."
+
+**Why the audit trail is the sellable part:** a probability score is a
+commodity — every vendor has one. A SHA-256 hash-chained record of *every*
+model decision and *every* human override, verifiable end to end on
+demand, is the piece that turns a model into something a compliance buyer
+signs off on. This mirrors the audit/compliance infrastructure companies
+like Intain already build for structured finance transactions — applied
+here one level down, to servicing-level loan review instead of deal-level
+reporting.
 
 ## Architecture
 
@@ -41,9 +64,17 @@ loan_intelligence/
     simulate.py                shock a feature across the portfolio, rescore, report the shift
   review/
     narrate.py                 LLM reviewer note from already-computed numbers (explanation only)
+    decisions.py                human accept/override loop on a flagged loan, hash-chained to the flag it responds to
+  portfolio/
+    summary.py                  Portfolio Command aggregates: expected loss, risk tiers, anomaly rate, override rate
   audit/
     hash_chain.py               SHA-256 hash-chained SQLite log of every model decision
+  api/
+    main.py                      FastAPI layer exposing all of the above over HTTP -- see API below
 demo.py                        one command, one loan, the whole pipeline live
+app.py                         minimal Streamlit UI over the same modules the API and CLI use
+tests/
+  test_decisions.py             pytest: override logs a correct reference and the chain still verifies
 ```
 
 Each module is runnable and testable on its own (`python -m loan_intelligence.<pkg>.<module>`),
@@ -59,6 +90,7 @@ so the git history is one working stage per commit rather than one big drop.
 | Feature attributions | SHAP (`TreeExplainer` for XGBoost, `GradientExplainer` for the autoencoder) |
 | Scenario shift | The same XGBoost model + calibrator, rescored on shocked features |
 | Reviewer note | Gemini, given the numbers above as fixed input — narration only |
+| Reviewer decision | A human (accept/override) — never changes the stored prediction/anomaly score, only logs a judgment against it |
 | Audit record | SHA-256 hash chain over every one of the above, in SQLite |
 
 ## Judged-criteria mapping
@@ -74,6 +106,9 @@ so the git history is one working stage per commit rather than one big drop.
 | Scenario simulation | `scenario/simulate.py` — shock interest rate / DTI / regional income, see the portfolio-level and per-loan shift |
 | Human-reviewer explanation | `review/narrate.py` — LLM narration, explanation-only (see above) |
 | Traceability / audit | `audit/hash_chain.py` — SHA-256 hash-chained SQLite log; `main()` demonstrates tamper detection live |
+| Human-in-the-loop review | `review/decisions.py` — accept/override a flag; the decision references the exact flag entry's hash, never mutates it (4 pytest tests, `tests/test_decisions.py`) |
+| Portfolio-level view | `portfolio/summary.py` — expected loss, risk-tier mix, anomaly rate by region/loan_type, reviewer override rate, scenario comparison |
+| Product API | `api/main.py` — every capability above over HTTP for a frontend; live docs at `/docs` |
 
 ## Results (this run, seed 42, 5,000 synthetic loans)
 
@@ -139,3 +174,59 @@ driver (loan-to-income ratio, peer-cohort z-scores — against the
 *original* cohort statistics, not refit on the shocked population),
 rescores with the calibrated XGBoost model, and logs the run to the audit
 trail.
+
+## Reviewer decision loop
+
+A loan is "flagged" when its calibrated probability lands in the "high"
+risk tier (≥30%) or the anomaly detector marks it top-1% unusual
+(`config.risk_tier`, shared by `review/decisions.py` and
+`portfolio/summary.py` so a loan's tier never disagrees between views).
+
+```bash
+python -m loan_intelligence.review.decisions --loan-id L100000 --decision override --reason "confirmed false positive with borrower"
+python -m loan_intelligence.review.decisions --loan-id L100000 --decision accept
+```
+
+The decision is logged as its own hash-chained entry that references the
+exact `entry_hash` of the flag it responds to — reviewing a loan with no
+current flag is rejected. It never changes the underlying prediction or
+anomaly score. `pytest tests/test_decisions.py -v` exercises this end to
+end, including that tampering an override after the fact breaks
+verification.
+
+## Portfolio Command
+
+```bash
+python -m loan_intelligence.portfolio.summary
+```
+
+The aggregate view: total expected loss, risk-tier mix, flagged-loan
+count/pct, anomaly rate and count by region and loan type, the reviewer
+override rate, and — once a scenario has been run — baseline vs. shocked
+expected loss on the current book. Backs `GET /portfolio/summary` and the
+Streamlit app's overview tab.
+
+## API
+
+```bash
+python -m uvicorn loan_intelligence.api.main:app --reload --port 8000
+```
+
+(`python -m uvicorn`, not a bare `uvicorn` command — this keeps the repo
+root, and the `demo` module this file and `review/decisions.py` import
+from, on `sys.path`.) Interactive reference at `http://localhost:8000/docs`.
+
+| Route | What it does |
+|---|---|
+| `GET /portfolio/summary` | Portfolio Command aggregates |
+| `GET /loans` | Paginated, filterable by `risk_tier` / `region` / `loan_type` / `flagged` |
+| `GET /loans/{loan_id}` | Full record: prediction, calibrated probability, anomaly flag, SHAP, reviewer note, audit history |
+| `POST /loans/{loan_id}/review` | `{"decision": "accept"\|"override", "reason": "..."}` — 400 if the loan isn't currently flagged |
+| `POST /scenario/run` | `{"feature": "interest_rate"\|"dti"\|"regional_income", "shock": 2.0, "region": null}` — before/after portfolio expected loss |
+| `GET /audit/verify` | Re-verifies the full hash chain; `{"valid": false, "broken_at_id": ...}` on tamper |
+
+No auth (demo scope), CORS open for local frontend dev. Every route is a
+thin wrapper over the modules above — no modeling logic lives in `api/`.
+Expensive objects (loaded models, the SHAP explainers) are built once on
+first request via `functools.lru_cache`: the first `GET /loans/{id}` call
+takes ~20s, every call after is ~0.5s.
