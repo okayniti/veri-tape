@@ -26,7 +26,7 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 OUTPUT_DIR = BASE_DIR / "outputs"
 
 
-def _load_current_book() -> pd.DataFrame:
+def load_current_book() -> pd.DataFrame:
     """The test split (the current book), joined with calibrated
     predictions and anomaly scores. A loan is "flagged" under the same
     rule review/decisions.py uses: high risk tier, or a top-1% anomaly."""
@@ -107,7 +107,7 @@ def _latest_scenario_comparison(current_book: pd.DataFrame) -> dict | None:
 
 
 def build_summary() -> dict:
-    df = _load_current_book()
+    df = load_current_book()
     trail = AuditTrail()
 
     return {

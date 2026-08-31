@@ -96,16 +96,22 @@ def run_scenario(shock_type: str, magnitude: float, region: str | None = None, t
     shocked = apply_shock(portfolio, shock_type, magnitude, fit_params, region=region)
     proba_after = _predict(model, calibrator, shocked, feature_cols)
 
-    result_df = portfolio[["loan_id", "region", "loan_type"]].copy()
+    result_df = portfolio[["loan_id", "region", "loan_type", "loan_amount"]].copy()
     result_df["proba_before"] = proba_before
     result_df["proba_after"] = proba_after
     result_df["delta"] = proba_after - proba_before
+
+    expected_loss_before = float((proba_before * portfolio["loan_amount"]).sum())
+    expected_loss_after = float((proba_after * portfolio["loan_amount"]).sum())
 
     summary = {
         "shock_type": shock_type,
         "magnitude": magnitude,
         "region": region,
         "n_loans_in_scope": len(portfolio),
+        "expected_loss_before": round(expected_loss_before, 2),
+        "expected_loss_after": round(expected_loss_after, 2),
+        "expected_loss_delta": round(expected_loss_after - expected_loss_before, 2),
         "portfolio_mean_proba_before": round(float(proba_before.mean()), 4),
         "portfolio_mean_proba_after": round(float(proba_after.mean()), 4),
         "mean_delta": round(float((proba_after - proba_before).mean()), 4),
@@ -132,6 +138,33 @@ def plot_shift(proba_before: np.ndarray, proba_after: np.ndarray, title: str, ou
     plt.close(fig)
 
 
+def persist_scenario_result(
+    shock_type: str, magnitude: float, region: str | None,
+    summary: dict, result_df: pd.DataFrame, proba_before: np.ndarray, proba_after: np.ndarray,
+) -> dict:
+    """Writes the plot + result CSV + summary JSON to disk and logs the run
+    to the audit trail -- the persistence side effects `main()` performs,
+    factored out so api/main.py's POST /scenario/run produces exactly the
+    same on-disk artifacts (which portfolio/summary.py reads back for its
+    baseline-vs-shocked comparison) as running this module from the CLI."""
+    tag = f"{shock_type}_{magnitude}" + (f"_{region}" if region else "")
+    plot_path = REPORT_DIR / f"scenario_{tag}.png"
+    plot_shift(proba_before, proba_after, f"Scenario: {shock_type} shock ({magnitude:+g})", plot_path)
+
+    result_path = OUTPUT_DIR / f"scenario_result_{tag}.csv"
+    result_df.to_csv(result_path, index=False)
+    summary_path = OUTPUT_DIR / f"scenario_summary_{tag}.json"
+    summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+
+    entry_hash = AuditTrail().log("scenario_run", None, {
+        "shock_type": shock_type, "magnitude": magnitude, "region": region,
+        "portfolio_mean_proba_before": summary["portfolio_mean_proba_before"],
+        "portfolio_mean_proba_after": summary["portfolio_mean_proba_after"],
+    })
+
+    return {"plot_path": str(plot_path), "result_path": str(result_path), "summary_path": str(summary_path), "audit_entry_hash": entry_hash}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Shock a portfolio feature and see how default probability shifts.")
     parser.add_argument("--shock", choices=SHOCK_TYPES, required=True)
@@ -152,22 +185,9 @@ def main() -> None:
     for row in summary["top_movers"]:
         print(f"    {row['loan_id']}  ({row['region']}/{row['loan_type']})  {row['proba_before']:.3f} -> {row['proba_after']:.3f}  ({row['delta']:+.3f})")
 
-    tag = f"{args.shock}_{args.magnitude}" + (f"_{args.region}" if args.region else "")
-    plot_path = REPORT_DIR / f"scenario_{tag}.png"
-    plot_shift(proba_before, proba_after, f"Scenario: {args.shock} shock ({args.magnitude:+g})", plot_path)
+    paths = persist_scenario_result(args.shock, args.magnitude, args.region, summary, result_df, proba_before, proba_after)
 
-    result_path = OUTPUT_DIR / f"scenario_result_{tag}.csv"
-    result_df.to_csv(result_path, index=False)
-    summary_path = OUTPUT_DIR / f"scenario_summary_{tag}.json"
-    summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
-
-    AuditTrail().log("scenario_run", None, {
-        "shock_type": args.shock, "magnitude": args.magnitude, "region": args.region,
-        "portfolio_mean_proba_before": summary["portfolio_mean_proba_before"],
-        "portfolio_mean_proba_after": summary["portfolio_mean_proba_after"],
-    })
-
-    print(f"\nwrote {plot_path}, {result_path}, {summary_path}")
+    print(f"\nwrote {paths['plot_path']}, {paths['result_path']}, {paths['summary_path']}")
     print("logged scenario run to the audit trail")
 
 
