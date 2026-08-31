@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { DURATION, EASE, EASE_OUT, prefersReducedMotion } from "@/lib/motion";
+import LoaderTicker from "./LoaderTicker";
 
 const MIN_DISPLAY_MS = 2000;
 const CLIMB_TARGET = 92;
@@ -120,6 +121,7 @@ export default function Loader({ ready, onDone }: { ready: boolean; onDone: () =
           <div ref={barRef} className="h-full bg-accent" style={{ width: "0%" }} />
         </div>
         <p className="mt-6 text-xs uppercase tracking-[0.35em] text-muted">VeriTape</p>
+        <LoaderTicker />
       </div>
       <div ref={wipeRef} className="pointer-events-none absolute inset-0 origin-bottom scale-y-0 bg-accent" />
     </div>
