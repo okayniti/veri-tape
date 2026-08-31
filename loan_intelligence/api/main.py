@@ -25,6 +25,17 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from loan_intelligence.api.schemas import (
+    AuditEntry,
+    AuditVerifyResponse,
+    HealthResponse,
+    HTTPError,
+    LoanDetailResponse,
+    LoanListResponse,
+    PortfolioSummaryResponse,
+    ReviewResponse,
+    ScenarioRunResponse,
+)
 from loan_intelligence.audit.hash_chain import AuditTrail
 from loan_intelligence.portfolio.summary import build_summary, load_current_book
 from loan_intelligence.review.decisions import ensure_scored, submit_decision
@@ -113,13 +124,13 @@ class ScenarioRequest(BaseModel):
 # Routes
 # ---------------------------------------------------------------------------
 
-@app.get("/", tags=["meta"], summary="Health check")
+@app.get("/", tags=["meta"], summary="Health check", response_model=HealthResponse)
 def root():
     """Liveness check. See /docs for the full API reference."""
     return {"service": "veritape-api", "status": "ok"}
 
 
-@app.get("/portfolio/summary", tags=["portfolio"], summary="Portfolio Command aggregates")
+@app.get("/portfolio/summary", tags=["portfolio"], summary="Portfolio Command aggregates", response_model=PortfolioSummaryResponse)
 def portfolio_summary():
     """Total expected loss, risk-tier breakdown, flagged-loan count/pct,
     anomaly rate and count by region and loan_type, reviewer override rate,
@@ -130,7 +141,7 @@ def portfolio_summary():
     return build_summary()
 
 
-@app.get("/loans", tags=["loans"], summary="Paginated, filterable loan list")
+@app.get("/loans", tags=["loans"], summary="Paginated, filterable loan list", response_model=LoanListResponse)
 def list_loans(
     page: int = Query(1, ge=1, description="1-indexed page number"),
     page_size: int = Query(20, ge=1, le=200),
@@ -164,7 +175,10 @@ def list_loans(
     return {"total": total, "page": page, "page_size": page_size, "items": items}
 
 
-@app.get("/loans/{loan_id}", tags=["loans"], summary="Full record for one loan")
+@app.get(
+    "/loans/{loan_id}", tags=["loans"], summary="Full record for one loan",
+    response_model=LoanDetailResponse, responses={404: {"model": HTTPError}},
+)
 def get_loan(loan_id: str):
     """Prediction, calibrated probability, anomaly flag, SHAP top features,
     reviewer note, and audit history for one loan.
@@ -214,7 +228,10 @@ def get_loan(loan_id: str):
     }
 
 
-@app.post("/loans/{loan_id}/review", tags=["loans"], summary="Submit a reviewer decision")
+@app.post(
+    "/loans/{loan_id}/review", tags=["loans"], summary="Submit a reviewer decision",
+    response_model=ReviewResponse, responses={400: {"model": HTTPError}},
+)
 def review_loan(loan_id: str, body: ReviewRequest):
     """Accept or override the current flag on a loan. Rejected (400) if the
     loan isn't currently flagged -- there's nothing to review. Never
@@ -227,7 +244,10 @@ def review_loan(loan_id: str, body: ReviewRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.post("/scenario/run", tags=["scenario"], summary="Run a portfolio scenario shock")
+@app.post(
+    "/scenario/run", tags=["scenario"], summary="Run a portfolio scenario shock",
+    response_model=ScenarioRunResponse, responses={400: {"model": HTTPError}},
+)
 def scenario_run(body: ScenarioRequest):
     """Shocks a feature (interest_rate: +/- percentage points; dti: +/-
     fraction e.g. 0.15; regional_income: +/-% income change, optionally
@@ -252,9 +272,18 @@ def scenario_run(body: ScenarioRequest):
     }
 
 
-@app.get("/audit/verify", tags=["audit"], summary="Verify the hash chain")
+@app.get("/audit/verify", tags=["audit"], summary="Verify the hash chain", response_model=AuditVerifyResponse)
 def audit_verify():
     """Re-verifies the full SHA-256 hash chain from genesis. Returns
     {"valid": true, "n_entries": N} or {"valid": false, "broken_at_id": id,
     "reason": ...} at the first link that doesn't reproduce."""
     return AuditTrail().verify()
+
+
+@app.get("/audit/entries", tags=["audit"], summary="List every audit entry", response_model=list[AuditEntry])
+def audit_entries():
+    """Every entry in the hash chain, oldest first -- the raw sequence
+    verify() walks. For visualizing the chain itself (nodes, links, which
+    entry references which); GET /audit/verify stays the lightweight
+    valid/broken check for anything that just needs a status."""
+    return _history_to_records(AuditTrail().export_all())
