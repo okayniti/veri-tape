@@ -85,7 +85,7 @@ export default function PortfolioCommand({
             ) : summary ? (
               <>
                 <div className="mt-6 font-mono text-5xl font-light text-foreground sm:text-7xl md:text-8xl">
-                  <CountUp value={summary.total_portfolio_expected_loss} formatter={formatCompactCurrency} />
+                  <CountUp value={summary.total_portfolio_expected_loss} formatter={formatCompactCurrency} triggerOnScroll />
                 </div>
                 <p className="mt-4 max-w-md text-sm text-muted">
                   Total expected loss across {summary.n_loans.toLocaleString()} loans in the current book
@@ -117,12 +117,23 @@ export default function PortfolioCommand({
             ))}
           </div>
 
-          <div className="mt-16 grid grid-cols-1 gap-8 sm:grid-cols-2">
+          <div className="mt-16 grid grid-cols-1 gap-8 sm:grid-cols-3">
             <Reveal delay={0.1}>
               <div className="rounded-lg border border-border bg-background-raised p-6">
                 <p className="text-xs uppercase tracking-wide text-muted">Flagged loans</p>
-                <p className="mt-2 font-mono text-3xl text-foreground">{summary.flagged_loan_count}</p>
+                <p className="mt-2 font-mono text-3xl text-foreground">
+                  <CountUp value={summary.flagged_loan_count} triggerOnScroll />
+                </p>
                 <p className="mt-1 text-xs text-muted">{summary.flagged_loan_pct.toFixed(1)}% of the current book</p>
+              </div>
+            </Reveal>
+            <Reveal delay={0.13}>
+              <div className="rounded-lg border border-border bg-background-raised p-6">
+                <p className="text-xs uppercase tracking-wide text-muted">Anomaly rate</p>
+                <p className="mt-2 font-mono text-3xl text-foreground">
+                  <CountUp value={summary.anomaly.overall_rate} formatter={formatPercent} triggerOnScroll />
+                </p>
+                <p className="mt-1 text-xs text-muted">{summary.anomaly.overall_count} loans flagged top-1%</p>
               </div>
             </Reveal>
             <Reveal delay={0.16}>
@@ -133,7 +144,7 @@ export default function PortfolioCommand({
                 ) : (
                   <>
                     <p className="mt-2 font-mono text-3xl text-foreground">
-                      {formatPercent(summary.reviewer.override_rate ?? 0)}
+                      <CountUp value={summary.reviewer.override_rate ?? 0} formatter={formatPercent} triggerOnScroll />
                     </p>
                     <p className="mt-1 text-xs text-muted">
                       {summary.reviewer.n_overrides} of {summary.reviewer.n_reviews} decisions
