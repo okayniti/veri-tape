@@ -1,15 +1,23 @@
 """SHA-256 hash-chained audit trail for every model decision (prediction,
-anomaly flag, scenario run, calibration run).
+anomaly flag, scenario run, calibration run, reviewer decision).
 
 Each row's entry_hash = SHA256(prev_hash | timestamp | event_type | loan_id |
-canonical-JSON payload). Every row commits to the hash of the row before it,
-so a single SQLite table becomes tamper-evident: editing any historical
-row's payload -- or its stored hash -- changes what verify() recomputes for
-that row, which no longer matches the next row's prev_hash, and every
-subsequent link breaks. This is a simplified, single-table version of the
-Postgres hash-chaining used for agent governance in a prior project
-(AegisAgent); SQLite is enough here since there's no concurrent-writer
-scenario to design around.
+references_hash | canonical-JSON payload). Every row commits to the hash of
+the row before it, so a single SQLite table becomes tamper-evident: editing
+any historical row's payload -- or its stored hash -- changes what verify()
+recomputes for that row, which no longer matches the next row's prev_hash,
+and every subsequent link breaks. This is a simplified, single-table
+version of the Postgres hash-chaining used for agent governance in a prior
+project (AegisAgent); SQLite is enough here since there's no
+concurrent-writer scenario to design around.
+
+`references_hash` links a decision to a specific earlier entry rather than
+just sharing its loan_id -- e.g. a reviewer's override references the exact
+entry_hash of the automated flag it's responding to (review/decisions.py).
+It's folded into the hash material like every other field, so an override
+can't be silently re-pointed at a different flag after the fact without
+breaking the chain. Entries with nothing to reference (a plain prediction,
+a scenario run) store "" for it.
 
 Run directly: `python -m loan_intelligence.audit.hash_chain` logs a few
 example entries from existing model outputs, verifies the chain, then
@@ -31,8 +39,8 @@ DEFAULT_DB_PATH = OUTPUT_DIR / "audit_trail.db"
 GENESIS_HASH = "0" * 64
 
 
-def _compute_hash(prev_hash: str, timestamp: str, event_type: str, loan_id: str, payload_json: str) -> str:
-    material = "|".join([prev_hash, timestamp, event_type, loan_id, payload_json]).encode("utf-8")
+def _compute_hash(prev_hash: str, timestamp: str, event_type: str, loan_id: str, references_hash: str, payload_json: str) -> str:
+    material = "|".join([prev_hash, timestamp, event_type, loan_id, references_hash, payload_json]).encode("utf-8")
     return hashlib.sha256(material).hexdigest()
 
 
@@ -53,6 +61,7 @@ class AuditTrail:
                 timestamp TEXT NOT NULL,
                 event_type TEXT NOT NULL,
                 loan_id TEXT,
+                references_hash TEXT NOT NULL DEFAULT '',
                 payload TEXT NOT NULL,
                 prev_hash TEXT NOT NULL,
                 entry_hash TEXT NOT NULL
@@ -65,18 +74,22 @@ class AuditTrail:
         row = conn.execute("SELECT entry_hash FROM audit_log ORDER BY id DESC LIMIT 1").fetchone()
         return row[0] if row else GENESIS_HASH
 
-    def log(self, event_type: str, loan_id: str | None, payload: dict) -> str:
-        """Appends one hash-chained entry. Returns the new entry's hash."""
+    def log(self, event_type: str, loan_id: str | None, payload: dict, references_hash: str = "") -> str:
+        """Appends one hash-chained entry. Returns the new entry's hash.
+
+        references_hash: the entry_hash of a specific prior entry this one
+        responds to (e.g. a reviewer_decision referencing the flag it
+        overrides). Leave blank for entries that don't respond to anything."""
         conn = self._connect()
         try:
             prev_hash = self._last_hash(conn)
             timestamp = dt.datetime.now(dt.timezone.utc).isoformat()
             payload_json = json.dumps(payload, sort_keys=True, default=str)
-            entry_hash = _compute_hash(prev_hash, timestamp, event_type, loan_id or "", payload_json)
+            entry_hash = _compute_hash(prev_hash, timestamp, event_type, loan_id or "", references_hash, payload_json)
             conn.execute(
-                "INSERT INTO audit_log (timestamp, event_type, loan_id, payload, prev_hash, entry_hash) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (timestamp, event_type, loan_id, payload_json, prev_hash, entry_hash),
+                "INSERT INTO audit_log (timestamp, event_type, loan_id, references_hash, payload, prev_hash, entry_hash) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (timestamp, event_type, loan_id, references_hash, payload_json, prev_hash, entry_hash),
             )
             conn.commit()
             return entry_hash
@@ -89,16 +102,16 @@ class AuditTrail:
         "reason": ...} at the first link that doesn't reproduce."""
         conn = self._connect()
         rows = conn.execute(
-            "SELECT id, timestamp, event_type, loan_id, payload, prev_hash, entry_hash "
+            "SELECT id, timestamp, event_type, loan_id, references_hash, payload, prev_hash, entry_hash "
             "FROM audit_log ORDER BY id ASC"
         ).fetchall()
         conn.close()
 
         expected_prev = GENESIS_HASH
-        for row_id, timestamp, event_type, loan_id, payload, prev_hash, entry_hash in rows:
+        for row_id, timestamp, event_type, loan_id, references_hash, payload, prev_hash, entry_hash in rows:
             if prev_hash != expected_prev:
                 return {"valid": False, "broken_at_id": row_id, "reason": "prev_hash does not match preceding entry's hash"}
-            recomputed = _compute_hash(prev_hash, timestamp, event_type, loan_id or "", payload)
+            recomputed = _compute_hash(prev_hash, timestamp, event_type, loan_id or "", references_hash, payload)
             if recomputed != entry_hash:
                 return {"valid": False, "broken_at_id": row_id, "reason": "stored entry_hash does not match recomputed hash (payload or metadata was altered)"}
             expected_prev = entry_hash
@@ -107,11 +120,25 @@ class AuditTrail:
     def history_for_loan(self, loan_id: str) -> pd.DataFrame:
         conn = self._connect()
         df = pd.read_sql_query(
-            "SELECT id, timestamp, event_type, loan_id, payload, entry_hash FROM audit_log WHERE loan_id = ? ORDER BY id ASC",
+            "SELECT id, timestamp, event_type, loan_id, references_hash, payload, entry_hash FROM audit_log "
+            "WHERE loan_id = ? ORDER BY id ASC",
             conn, params=(loan_id,),
         )
         conn.close()
         return df
+
+    def get_entry_by_hash(self, entry_hash: str) -> dict | None:
+        conn = self._connect()
+        row = conn.execute(
+            "SELECT id, timestamp, event_type, loan_id, references_hash, payload, entry_hash "
+            "FROM audit_log WHERE entry_hash = ?",
+            (entry_hash,),
+        ).fetchone()
+        conn.close()
+        if row is None:
+            return None
+        keys = ["id", "timestamp", "event_type", "loan_id", "references_hash", "payload", "entry_hash"]
+        return dict(zip(keys, row))
 
     def export_all(self) -> pd.DataFrame:
         conn = self._connect()

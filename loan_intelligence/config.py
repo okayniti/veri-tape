@@ -53,6 +53,22 @@ ORIGINATION_CHANNELS = ["retail", "broker", "correspondent"]
 # Delinquency staging used in the monthly payment panel.
 DPD_BUCKETS = [0, 30, 60, 90, 120]
 
+# --- Risk tiers (review/decisions.py, portfolio/summary.py) ----------------
+# Bucket boundaries for the calibrated default probability. Picked from the
+# actual test-set distribution (median ~3%, 97.4th percentile ~30%) so "high"
+# is a genuinely small, actionable tail rather than an arbitrary round number.
+# Shared by the reviewer-flag logic and the portfolio summary so a loan's
+# tier never disagrees between the two views.
+RISK_TIER_BOUNDS = {"low": 0.0, "medium": 0.10, "high": 0.30}
+
+
+def risk_tier(calibrated_probability: float) -> str:
+    if calibrated_probability >= RISK_TIER_BOUNDS["high"]:
+        return "high"
+    if calibrated_probability >= RISK_TIER_BOUNDS["medium"]:
+        return "medium"
+    return "low"
+
 # --- Messiness injection rates (data/generate_synthetic.py) ----------------
 MISSING_RATE = {
     "credit_score_at_origination": 0.04,
