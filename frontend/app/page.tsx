@@ -6,6 +6,7 @@ import CapabilitiesSplit from "@/components/CapabilitiesSplit";
 import CapabilityGrid from "@/components/CapabilityGrid";
 import CoreCapabilities from "@/components/CoreCapabilities";
 import FaqAccordion from "@/components/FaqAccordion";
+import Footer from "@/components/Footer";
 import Loader from "@/components/Loader";
 import LoanExplorer from "@/components/LoanExplorer";
 import PortfolioCommand from "@/components/PortfolioCommand";
@@ -57,9 +58,7 @@ export default function Home() {
         <AuditTrailSection />
         <CapabilitiesSplit />
         <FaqAccordion />
-        <footer className="border-t border-border px-6 py-10 text-center text-xs uppercase tracking-[0.3em] text-muted">
-          VeriTape — an auditable decision layer for loan servicing
-        </footer>
+        <Footer />
       </main>
     </>
   );
