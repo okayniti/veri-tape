@@ -23,6 +23,13 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
+      # Without this, Python fully block-buffers stdout whenever it isn't
+      # attached to a terminal -- exactly Render's log setup -- so print()
+      # output (progress lines, even a traceback) can sit in an internal
+      # buffer and never reach the log tail. This is what actually made an
+      # earlier seed failure look like silence instead of an error.
+      - key: PYTHONUNBUFFERED
+        value: "1"
       # Required for live LLM reviewer narration (loan_intelligence/review/narrate.py).
       # Set the real value in the Render dashboard -- never commit it here.
       # Without it, narration falls back to a labeled deterministic template;
@@ -31,9 +38,11 @@ services:
         sync: false
       # Cold-boot seeding (loan_intelligence/bootstrap.py) -- how many
       # synthetic loans and audit-trail entries to generate on a fresh
-      # container disk. Defaults shown; override only if a deploy needs a
-      # different speed/realism tradeoff.
-      - key: VERITAPE_SEED_N_LOANS
-        value: "1000"
+      # container disk. Kept small on purpose: Render's free tier is 0.1
+      # CPU/512MB, and the deployed instance's job is to prove the pipeline
+      # runs live, not to match the full 5,000-loan numbers already in the
+      # README/demo video.
+      - key: SEED_LOAN_COUNT
+        value: "100"
       - key: VERITAPE_SEED_AUDIT_BATCH
         value: "20"

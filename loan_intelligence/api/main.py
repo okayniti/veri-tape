@@ -65,12 +65,15 @@ async def lifespan(app: FastAPI):
     immediately; `/health` is always up regardless, and every data-dependent
     route below checks bootstrap.is_ready() first and 503s with a clear
     message rather than serving a crash or an empty response while the
-    thread is still running. The task is kept on app.state so it isn't
-    garbage-collected mid-run (asyncio only holds a weak reference to a
-    task with no other referrer)."""
-    from loan_intelligence.bootstrap import seed_if_needed
+    thread is still running. run_seed_with_timeout() additionally caps how
+    long that can go on for (SEED_TIMEOUT_SECONDS) before declaring seeding
+    failed rather than leaving those 503s indistinguishable from "just
+    slow" forever -- see bootstrap.py. The task is kept on app.state so it
+    isn't garbage-collected mid-run (asyncio only holds a weak reference to
+    a task with no other referrer)."""
+    from loan_intelligence.bootstrap import run_seed_with_timeout
 
-    app.state.seeding_task = asyncio.create_task(asyncio.to_thread(seed_if_needed))
+    app.state.seeding_task = asyncio.create_task(run_seed_with_timeout())
     yield
 
 

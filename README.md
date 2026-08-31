@@ -251,30 +251,44 @@ hand:
   docstring; a bare `uvicorn` entry-point script doesn't put the repo root,
   and with it the top-level `demo` module, on `sys.path`)
 - Env vars: `GOOGLE_API_KEY` (for live LLM narration; falls back to a
-  labeled template without it), `PYTHON_VERSION=3.11.9`
+  labeled template without it), `PYTHON_VERSION=3.11.9`, `PYTHONUNBUFFERED=1`
+  (see "Cold-start seeding" below for why this one matters)
 - Health check: `/health` (always 200, independent of seeding -- see below)
 
 **Cold-start seeding** (`loan_intelligence/bootstrap.py`): on startup, if
 `outputs/` is empty or the audit trail has zero entries, the API runs the
 same pipeline `python -m loan_intelligence.<module>` would locally — data
 generation, features, split, XGBoost, the anomaly autoencoder, calibration
-— at a smaller `VERITAPE_SEED_N_LOANS` (default 1,000 vs. the full 5,000) so
-a cold boot finishes in seconds, then logs real prediction/anomaly entries
-for `VERITAPE_SEED_AUDIT_BATCH` loans (default 20) via the exact function
-(`review/decisions.ensure_scored`) a loan's first real view already uses —
-so a judge opening the link right after a spin-down gets a populated
-Portfolio Command and a non-empty, valid audit chain, not a blank slate. A
-no-op once real data already exists (every local dev run, every boot after
-the first).
+— at a much smaller `SEED_LOAN_COUNT` (default 100, vs. the full 5,000 used
+locally and in the demo video: the deployed instance's job is to prove the
+pipeline runs live, not to match that scale) so a cold boot finishes in
+seconds even on the free tier's 0.1 CPU, then logs real prediction/anomaly
+entries for `VERITAPE_SEED_AUDIT_BATCH` loans (default 20) via the exact
+function (`review/decisions.ensure_scored`) a loan's first real view
+already uses — so a judge opening the link right after a spin-down gets a
+populated Portfolio Command and a non-empty, valid audit chain, not a blank
+slate. A no-op once real data already exists (every local dev run, every
+boot after the first).
 
-Seeding runs on a background thread, not awaited during startup: Render's
+Seeding runs on a background thread with a hard ceiling
+(`SEED_TIMEOUT_SECONDS`, default 180s), not awaited during startup: Render's
 free tier is 0.1 CPU, and blocking Uvicorn's own port bind on a from-scratch
 seed risked Render's port-scan timing the deploy out. `GET /health` is up
 immediately either way; every data-dependent route (`/loans`,
 `/portfolio/summary`, etc.) checks a `bootstrap.is_ready()` flag first and
 returns a 503 with a clear "still seeding" message while the background
 thread is running, rather than crashing on a half-written `outputs/` dir or
-serving something silently empty.
+serving something silently empty. Past the timeout, seeding is declared
+failed instead of leaving those 503s indistinguishable from "just slow"
+forever. `_run_pipeline()` also logs a line before/after each of its 6
+stages, so a log tail alone shows which stage is running -- or which one it
+died on -- rather than one line at the start and silence.
+
+A seed failure is loud on purpose: it's logged (stage + full traceback) via
+`print(..., flush=True)`, and `PYTHONUNBUFFERED=1` (set in `render.yaml`) is
+what actually gets that to Render's log tail -- Python fully block-buffers
+stdout by default whenever it isn't attached to a terminal, which is exactly
+what made an earlier failure here look like silence rather than an error.
 
 **Keep-alive** (`.github/workflows/keep-alive.yml`): pings the backend every
 10 minutes so it doesn't spin down between now and judging (update the
