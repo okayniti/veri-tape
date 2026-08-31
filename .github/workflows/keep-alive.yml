@@ -1,0 +1,26 @@
+name: Keep Render backend awake
+
+# Render's free tier spins a web service down after ~15 minutes with no
+# requests, and the next request pays a cold-start (plus, per bootstrap.py,
+# a re-seed of the demo portfolio since free-tier disk doesn't persist
+# across that spin-down). Pinging the health endpoint well inside that
+# 15-minute window keeps it warm between now and whenever judging happens.
+#
+# GitHub Actions schedules are best-effort and can drift several minutes
+# under load, so this runs every 10 minutes rather than cutting it close to
+# 14-15. Also runnable manually from the Actions tab (workflow_dispatch).
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping VeriTape API
+        # TODO: replace with the real Render service URL once deployed
+        # (Render dashboard -> the service -> the URL under its name).
+        run: |
+          curl -sS --max-time 30 https://veritape-api.onrender.com/ \
+            || echo "ping failed -- backend may be cold-starting (expected right after a spin-down) or actually down"

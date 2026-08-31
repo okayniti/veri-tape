@@ -225,8 +225,69 @@ from, on `sys.path`.) Interactive reference at `http://localhost:8000/docs`.
 | `POST /scenario/run` | `{"feature": "interest_rate"\|"dti"\|"regional_income", "shock": 2.0, "region": null}` — before/after portfolio expected loss |
 | `GET /audit/verify` | Re-verifies the full hash chain; `{"valid": false, "broken_at_id": ...}` on tamper |
 
-No auth (demo scope), CORS open for local frontend dev. Every route is a
-thin wrapper over the modules above — no modeling logic lives in `api/`.
-Expensive objects (loaded models, the SHAP explainers) are built once on
-first request via `functools.lru_cache`: the first `GET /loans/{id}` call
-takes ~20s, every call after is ~0.5s.
+CORS is restricted to local dev origins plus the deployed Vercel frontend
+(`ALLOWED_ORIGINS` in `api/main.py`) — no auth beyond that (demo scope).
+Every route is a thin wrapper over the modules above — no modeling logic
+lives in `api/`. Expensive objects (loaded models, the SHAP explainers) are
+built once on first request via `functools.lru_cache`: the first
+`GET /loans/{id}` call takes ~20s, every call after is ~0.5s.
+
+## Deploying (Vercel + Render)
+
+Frontend on Vercel, backend on Render. Both are stateless-friendly except
+for one wrinkle: **Render's free tier has no persistent disk**, so
+`outputs/audit_trail.db` and every generated CSV/model file disappear on
+every cold start (first deploy, or waking up after 15 minutes idle) — the
+same regenerable artifacts `.gitignore` already keeps out of git for local
+dev become a problem the moment "regenerate them" has to happen automatically
+instead of by running a command yourself.
+
+**Backend (Render)** — `render.yaml` at the repo root is a Blueprint Render
+can deploy directly (New + → Blueprint), or configure the same settings by
+hand:
+- Build: `pip install -r requirements.txt`
+- Start: `python -m uvicorn loan_intelligence.api.main:app --host 0.0.0.0 --port $PORT`
+  (`python -m`, not bare `uvicorn` — see the note in `api/main.py`'s
+  docstring; a bare `uvicorn` entry-point script doesn't put the repo root,
+  and with it the top-level `demo` module, on `sys.path`)
+- Env vars: `GOOGLE_API_KEY` (for live LLM narration; falls back to a
+  labeled template without it), `PYTHON_VERSION=3.11.9`
+- Health check: `/`
+
+**Cold-start seeding** (`loan_intelligence/bootstrap.py`): on startup, if
+`outputs/` is empty or the audit trail has zero entries, the API runs the
+same pipeline `python -m loan_intelligence.<module>` would locally — data
+generation, features, split, XGBoost, the anomaly autoencoder, calibration
+— at a smaller `VERITAPE_SEED_N_LOANS` (default 1,000 vs. the full 5,000) so
+a cold boot finishes in seconds, then logs real prediction/anomaly entries
+for `VERITAPE_SEED_AUDIT_BATCH` loans (default 20) via the exact function
+(`review/decisions.ensure_scored`) a loan's first real view already uses —
+so a judge opening the link right after a spin-down gets a populated
+Portfolio Command and a non-empty, valid audit chain, not a blank slate. A
+no-op once real data already exists (every local dev run, every boot after
+the first).
+
+**Keep-alive** (`.github/workflows/keep-alive.yml`): pings the backend every
+10 minutes so it doesn't spin down between now and judging (update the
+placeholder URL in that file once the Render service exists). Without it,
+the seeding above still makes every cold start self-healing — just slower
+than a warm one.
+
+**Frontend (Vercel)**: no code changes needed — `NEXT_PUBLIC_API_URL`
+already gates every API call (`frontend/lib/api.ts`, `frontend/.env.local`
+default). Set it in Vercel's Project Settings to the deployed Render URL.
+See `frontend/README.md`'s Deploying section.
+
+**Memory headroom (Render free tier, 512MB RAM)**: the live request path
+loads XGBoost (prediction) + a GRU+MLP autoencoder (anomaly) + SHAP's
+`TreeExplainer` and `GradientExplainer` — notably *not* the Bi-LSTM, which
+`api/main.py` never imports; it exists only as `models/predict.py`'s offline
+benchmark comparison point. Even so, PyTorch + XGBoost + SHAP + pandas
+resident together is genuinely tight against 512MB, plausibly over it under
+load — not a comfortable margin. Two mitigations are already in place:
+every expensive object is lazily built on first request
+(`functools.lru_cache` singletons in `api/main.py`), and `requirements.txt`
+installs the CPU-only PyTorch wheel (the default PyPI wheel bundles unused
+CUDA runtime libraries that inflate the resident footprint). If it still
+OOMs in practice, the next lever is Render's paid tier, not trimming
+anything already built.

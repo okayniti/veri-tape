@@ -16,6 +16,7 @@ Interactive API reference: http://localhost:8000/docs
 from __future__ import annotations
 
 import json
+from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal, Optional
@@ -44,6 +45,22 @@ from loan_intelligence.scenario.simulate import SHOCK_TYPES, persist_scenario_re
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """On a fresh container disk (Render free tier: no persistent disk, so
+    every cold start after a spin-down begins empty) seed a small synthetic
+    portfolio and a batch of real audit entries before accepting traffic, so
+    the deployed instance never opens to an empty Portfolio Command / Audit
+    Trail. A no-op once outputs/ and the audit trail already have real data
+    -- every local dev run, and every boot after the first in one container's
+    lifetime. See bootstrap.py."""
+    from loan_intelligence.bootstrap import seed_if_needed
+
+    seed_if_needed()
+    yield
+
+
 app = FastAPI(
     title="VeriTape API",
     description=(
@@ -54,11 +71,29 @@ app = FastAPI(
         "retrains a model or generates new data."
     ),
     version="1.0.0",
+    lifespan=lifespan,
 )
+
+# Local dev (Next.js default port, and 3001 when 3000 is already taken) plus
+# the deployed Vercel frontend. TODO: replace with the real Vercel URL once
+# the project is deployed there (or set via a VERCEL_ORIGIN env var if it
+# changes often) -- until then this placeholder keeps the deployed frontend
+# broken-but-obvious rather than silently allowed via a wildcard.
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+    "https://veritape.vercel.app",
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    # Vercel gives every branch/PR preview build its own subdomain
+    # (veritape-<hash>-<team>.vercel.app); this covers those without
+    # reopening the wildcard the explicit list above deliberately avoids.
+    allow_origin_regex=r"https://veritape.*\.vercel\.app",
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

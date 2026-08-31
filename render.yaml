@@ -1,0 +1,35 @@
+# Render Blueprint for the VeriTape backend. Deploy via the Render
+# dashboard's "New +" -> "Blueprint", pointed at this repo -- it reads this
+# file and provisions the service below. (You can also configure the same
+# settings by hand under "New +" -> "Web Service" if you'd rather not use a
+# Blueprint; the values to enter are exactly the ones here.)
+services:
+  - type: web
+    name: veritape-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # `python -m uvicorn`, not a bare `uvicorn` command: this keeps the repo
+    # root -- and with it, the top-level `demo` module that api/main.py and
+    # review/decisions.py both import from -- on sys.path, exactly like every
+    # `python -m loan_intelligence.<module>` invocation in this repo already
+    # relies on (see api/main.py's own docstring and the root README).
+    startCommand: python -m uvicorn loan_intelligence.api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      # Required for live LLM reviewer narration (loan_intelligence/review/narrate.py).
+      # Set the real value in the Render dashboard -- never commit it here.
+      # Without it, narration falls back to a labeled deterministic template;
+      # the rest of the pipeline is unaffected either way.
+      - key: GOOGLE_API_KEY
+        sync: false
+      # Cold-boot seeding (loan_intelligence/bootstrap.py) -- how many
+      # synthetic loans and audit-trail entries to generate on a fresh
+      # container disk. Defaults shown; override only if a deploy needs a
+      # different speed/realism tradeoff.
+      - key: VERITAPE_SEED_N_LOANS
+        value: "1000"
+      - key: VERITAPE_SEED_AUDIT_BATCH
+        value: "20"

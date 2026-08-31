@@ -44,6 +44,26 @@ scroll-driven reveals and the portfolio-hero pin/release; Lenis for smooth
 scroll. One accent color, one shared motion config (`lib/motion.ts`) --
 no per-component ad hoc easing.
 
+## Deploying (Vercel)
+
+The app already reads its API base URL from `NEXT_PUBLIC_API_URL` everywhere
+(`lib/api.ts`, `Footer.tsx`) with the localhost default above only as a
+fallback -- nothing hardcodes `127.0.0.1`, so no code changes are needed to
+deploy. In the Vercel project's Settings -> Environment Variables, set:
+
+```
+NEXT_PUBLIC_API_URL=https://<your-render-service>.onrender.com
+```
+
+then redeploy (env var changes don't apply to already-built deployments).
+`npm run gen:types` still targets `127.0.0.1:8000` directly -- that's a local
+codegen step against a running dev server, never executed at build or
+runtime, so it doesn't need a deployed counterpart.
+
+The backend's CORS list (`loan_intelligence/api/main.py`) has to allow your
+actual `*.vercel.app` domain (or custom domain) -- see that file's
+`ALLOWED_ORIGINS`.
+
 ## Notable behavior
 
 - `GET /loans` paginates via `page_size`, not `limit`.
