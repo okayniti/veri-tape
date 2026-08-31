@@ -7,6 +7,7 @@ import type { PortfolioSummary } from "@/lib/api";
 import { formatCompactCurrency, formatCurrency, formatPercent, RISK_TIER_LABEL } from "@/lib/format";
 import { prefersReducedMotion } from "@/lib/motion";
 import CountUp from "./CountUp";
+import PipelineMarquee from "./PipelineMarquee";
 import Reveal from "./Reveal";
 import { ErrorPanel, LoadingPanel } from "./Status";
 
@@ -72,6 +73,7 @@ export default function PortfolioCommand({
 
   return (
     <section id="portfolio" className="relative">
+      <PipelineMarquee />
       <div ref={wrapRef} className="relative min-h-[150vh]">
         <div className="sticky top-0 flex h-screen flex-col items-center justify-center px-6 text-center">
           <div ref={contentRef}>
