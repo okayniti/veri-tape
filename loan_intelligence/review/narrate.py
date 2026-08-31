@@ -82,10 +82,10 @@ def gather_facts(loan_id: str, pred_explainer, anomaly_explainer=None) -> dict:
     return facts
 
 
-def _template_fallback(facts: dict) -> str:
+def _template_fallback(facts: dict, reason: str = "no GOOGLE_API_KEY/GEMINI_API_KEY set") -> str:
     top_driver = facts["top_prediction_drivers"][0]
     note = (
-        f"[template fallback -- no GOOGLE_API_KEY/GEMINI_API_KEY set] Loan {facts['loan_id']}: calibrated default "
+        f"[template fallback -- {reason}] Loan {facts['loan_id']}: calibrated default "
         f"probability {facts['calibrated_probability']:.0%}, most influenced by {top_driver['feature']} "
         f"(value {top_driver['value']}, SHAP {top_driver['shap_value']:+.3f})."
     )
@@ -105,23 +105,33 @@ def generate_reviewer_note(facts: dict, model: str = DEFAULT_MODEL, dry_run: boo
     from google import genai
     from google.genai import types
 
-    client = genai.Client()  # reads GOOGLE_API_KEY, else GEMINI_API_KEY, from the environment
-    response = client.models.generate_content(
-        model=model,
-        contents=json.dumps(facts, indent=2),
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT,
-            max_output_tokens=1024,
-            temperature=0.3,
-            # This is short narration, not a reasoning task -- keep thinking
-            # minimal. Without this, gemini-3.6-flash's thinking tokens (not
-            # separately budgeted) can consume the entire max_output_tokens
-            # before any visible text is produced, truncating the response
-            # to a few words with no error raised.
-            thinking_config=types.ThinkingConfig(thinking_level="MINIMAL"),
-        ),
-    )
-    return (response.text or "").strip()
+    # Narration must never be load-bearing: a transient upstream failure here
+    # (rate limit, 503 "model overloaded", network blip) degrades to the
+    # template fallback instead of propagating -- callers like
+    # api/main.py's GET /loans/{id} return prediction/SHAP/audit data
+    # regardless of whether Gemini is having a bad moment. The fallback text
+    # says so explicitly rather than silently pretending the LLM succeeded.
+    try:
+        client = genai.Client()  # reads GOOGLE_API_KEY, else GEMINI_API_KEY, from the environment
+        response = client.models.generate_content(
+            model=model,
+            contents=json.dumps(facts, indent=2),
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                max_output_tokens=1024,
+                temperature=0.3,
+                # This is short narration, not a reasoning task -- keep thinking
+                # minimal. Without this, gemini-3.6-flash's thinking tokens (not
+                # separately budgeted) can consume the entire max_output_tokens
+                # before any visible text is produced, truncating the response
+                # to a few words with no error raised.
+                thinking_config=types.ThinkingConfig(thinking_level="MINIMAL"),
+            ),
+        )
+        text = (response.text or "").strip()
+        return text or _template_fallback(facts, reason="Gemini returned an empty response")
+    except Exception as e:
+        return _template_fallback(facts, reason=f"Gemini call failed ({type(e).__name__}); showing computed numbers only")
 
 
 def narrate_loan(loan_id: str, pred_explainer, anomaly_explainer=None, model: str = DEFAULT_MODEL, dry_run: bool = False) -> dict:
