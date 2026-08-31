@@ -51,6 +51,31 @@ def _risk_tier_breakdown(df: pd.DataFrame) -> list[dict]:
     ]
 
 
+def _anomaly_lift() -> float | None:
+    """Precision-at-alert-budget lift of the anomaly detector's top-1% flag
+    over a random baseline, against the hidden ground truth
+    (outputs/ground_truth.csv, already merged into anomaly_scores_test.csv
+    by models/anomaly.py's own evaluation) -- the same precision/lift
+    methodology models/anomaly.py reports, as a single portfolio-level
+    number. Deliberately computed from anomaly_scores_test.csv directly
+    rather than folded into load_current_book(): is_anomalous is
+    evaluation-only ground truth and must never appear on a per-loan API
+    response (GET /loans, GET /loans/{id}), only in this aggregate."""
+    path = OUTPUT_DIR / "anomaly_scores_test.csv"
+    if not path.exists():
+        return None
+    df = pd.read_csv(path)
+    if "is_anomalous" not in df.columns or "flagged_top_1pct" not in df.columns:
+        return None
+
+    flagged = df[df["flagged_top_1pct"]]
+    base_rate = float(df["is_anomalous"].mean())
+    if flagged.empty or base_rate == 0:
+        return None
+    precision = float(flagged["is_anomalous"].mean())
+    return round(precision / base_rate, 2)
+
+
 def _anomaly_breakdown(df: pd.DataFrame) -> dict:
     def _grouped(col: str) -> dict:
         g = df.groupby(col)["flagged_top_1pct"].agg(count="sum", rate="mean")
@@ -59,6 +84,7 @@ def _anomaly_breakdown(df: pd.DataFrame) -> dict:
     return {
         "overall_rate": round(float(df["flagged_top_1pct"].mean()), 4),
         "overall_count": int(df["flagged_top_1pct"].sum()),
+        "lift": _anomaly_lift(),
         "by_region": _grouped("region"),
         "by_loan_type": _grouped("loan_type"),
     }

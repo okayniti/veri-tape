@@ -203,6 +203,8 @@ export interface components {
             overall_rate: number;
             /** Overall Count */
             overall_count: number;
+            /** Lift */
+            lift?: number | null;
             /** By Region */
             by_region: {
                 [key: string]: components["schemas"]["GroupStat"];

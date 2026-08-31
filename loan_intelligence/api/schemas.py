@@ -34,6 +34,9 @@ class GroupStat(BaseModel):
 class AnomalyBreakdown(BaseModel):
     overall_rate: float
     overall_count: int
+    # Precision-at-alert-budget lift over a random baseline, against hidden
+    # ground truth -- None if there's nothing flagged yet to score against.
+    lift: Optional[float] = None
     by_region: dict[str, GroupStat]
     by_loan_type: dict[str, GroupStat]
 
