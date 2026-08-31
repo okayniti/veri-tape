@@ -252,7 +252,7 @@ hand:
   and with it the top-level `demo` module, on `sys.path`)
 - Env vars: `GOOGLE_API_KEY` (for live LLM narration; falls back to a
   labeled template without it), `PYTHON_VERSION=3.11.9`
-- Health check: `/`
+- Health check: `/health` (always 200, independent of seeding -- see below)
 
 **Cold-start seeding** (`loan_intelligence/bootstrap.py`): on startup, if
 `outputs/` is empty or the audit trail has zero entries, the API runs the
@@ -266,6 +266,15 @@ so a judge opening the link right after a spin-down gets a populated
 Portfolio Command and a non-empty, valid audit chain, not a blank slate. A
 no-op once real data already exists (every local dev run, every boot after
 the first).
+
+Seeding runs on a background thread, not awaited during startup: Render's
+free tier is 0.1 CPU, and blocking Uvicorn's own port bind on a from-scratch
+seed risked Render's port-scan timing the deploy out. `GET /health` is up
+immediately either way; every data-dependent route (`/loans`,
+`/portfolio/summary`, etc.) checks a `bootstrap.is_ready()` flag first and
+returns a 503 with a clear "still seeding" message while the background
+thread is running, rather than crashing on a half-written `outputs/` dir or
+serving something silently empty.
 
 **Keep-alive** (`.github/workflows/keep-alive.yml`): pings the backend every
 10 minutes so it doesn't spin down between now and judging (update the

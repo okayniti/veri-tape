@@ -15,6 +15,7 @@ Interactive API reference: http://localhost:8000/docs
 """
 from __future__ import annotations
 
+import asyncio
 import json
 from contextlib import asynccontextmanager
 from functools import lru_cache
@@ -22,7 +23,7 @@ from pathlib import Path
 from typing import Literal, Optional
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -50,14 +51,26 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 async def lifespan(app: FastAPI):
     """On a fresh container disk (Render free tier: no persistent disk, so
     every cold start after a spin-down begins empty) seed a small synthetic
-    portfolio and a batch of real audit entries before accepting traffic, so
-    the deployed instance never opens to an empty Portfolio Command / Audit
-    Trail. A no-op once outputs/ and the audit trail already have real data
-    -- every local dev run, and every boot after the first in one container's
-    lifetime. See bootstrap.py."""
+    portfolio and a batch of real audit entries, so the deployed instance
+    never opens to an empty Portfolio Command / Audit Trail. A no-op once
+    outputs/ and the audit trail already have real data -- every local dev
+    run, and every boot after the first in one container's lifetime. See
+    bootstrap.py.
+
+    Deliberately NOT awaited here: Render's free tier is 0.1 CPU, and a
+    from-scratch seed can take long enough on that little compute that
+    blocking Uvicorn's own startup on it risks Render's port-scan timing the
+    deploy out -- even though nothing would actually be broken. Scheduling
+    it on a background thread instead lets Uvicorn bind and start serving
+    immediately; `/health` is always up regardless, and every data-dependent
+    route below checks bootstrap.is_ready() first and 503s with a clear
+    message rather than serving a crash or an empty response while the
+    thread is still running. The task is kept on app.state so it isn't
+    garbage-collected mid-run (asyncio only holds a weak reference to a
+    task with no other referrer)."""
     from loan_intelligence.bootstrap import seed_if_needed
 
-    seed_if_needed()
+    app.state.seeding_task = asyncio.create_task(asyncio.to_thread(seed_if_needed))
     yield
 
 
@@ -128,6 +141,23 @@ def _anomaly_explainer():
     return AnomalyExplainer()
 
 
+def _require_seeded() -> None:
+    """FastAPI dependency guarding every data-dependent route: 503s while
+    the background seed (see `lifespan` above) is still running, instead of
+    letting a route crash reading a half-written outputs/ dir or silently
+    serve empty/partial data. Cheap to check -- a lock plus a bool read."""
+    from loan_intelligence.bootstrap import is_ready, seeding_error
+
+    if not is_ready():
+        raise HTTPException(
+            status_code=503,
+            detail="VeriTape is still seeding its demo portfolio on this fresh deploy -- try again in a few seconds.",
+        )
+    error = seeding_error()
+    if error:
+        raise HTTPException(status_code=503, detail=f"Seeding the demo portfolio failed: {error}")
+
+
 def _history_to_records(history_df: pd.DataFrame) -> list[dict]:
     records = []
     for _, row in history_df.iterrows():
@@ -165,7 +195,23 @@ def root():
     return {"service": "veritape-api", "status": "ok"}
 
 
-@app.get("/portfolio/summary", tags=["portfolio"], summary="Portfolio Command aggregates", response_model=PortfolioSummaryResponse)
+@app.get("/health", tags=["meta"], summary="Health check (always up)")
+def health():
+    """Returns 200 immediately, regardless of whether the background seed
+    (see bootstrap.py) is still running -- deliberately has no dependency
+    on bootstrap.is_ready(). This is what Render's own health check and the
+    keep-alive workflow ping: the process being up and able to serve a
+    response is the thing they need to know, not whether the demo portfolio
+    has finished seeding yet (GET /loans etc. report that themselves, via a
+    503, if it hasn't)."""
+    return {"status": "ok"}
+
+
+@app.get(
+    "/portfolio/summary", tags=["portfolio"], summary="Portfolio Command aggregates",
+    response_model=PortfolioSummaryResponse, responses={503: {"model": HTTPError}},
+    dependencies=[Depends(_require_seeded)],
+)
 def portfolio_summary():
     """Total expected loss, risk-tier breakdown, flagged-loan count/pct,
     anomaly rate and count by region and loan_type, reviewer override rate,
@@ -176,7 +222,11 @@ def portfolio_summary():
     return build_summary()
 
 
-@app.get("/loans", tags=["loans"], summary="Paginated, filterable loan list", response_model=LoanListResponse)
+@app.get(
+    "/loans", tags=["loans"], summary="Paginated, filterable loan list",
+    response_model=LoanListResponse, responses={503: {"model": HTTPError}},
+    dependencies=[Depends(_require_seeded)],
+)
 def list_loans(
     page: int = Query(1, ge=1, description="1-indexed page number"),
     page_size: int = Query(20, ge=1, le=200),
@@ -212,7 +262,8 @@ def list_loans(
 
 @app.get(
     "/loans/{loan_id}", tags=["loans"], summary="Full record for one loan",
-    response_model=LoanDetailResponse, responses={404: {"model": HTTPError}},
+    response_model=LoanDetailResponse, responses={404: {"model": HTTPError}, 503: {"model": HTTPError}},
+    dependencies=[Depends(_require_seeded)],
 )
 def get_loan(loan_id: str):
     """Prediction, calibrated probability, anomaly flag, SHAP top features,
@@ -265,7 +316,8 @@ def get_loan(loan_id: str):
 
 @app.post(
     "/loans/{loan_id}/review", tags=["loans"], summary="Submit a reviewer decision",
-    response_model=ReviewResponse, responses={400: {"model": HTTPError}},
+    response_model=ReviewResponse, responses={400: {"model": HTTPError}, 503: {"model": HTTPError}},
+    dependencies=[Depends(_require_seeded)],
 )
 def review_loan(loan_id: str, body: ReviewRequest):
     """Accept or override the current flag on a loan. Rejected (400) if the
@@ -281,7 +333,8 @@ def review_loan(loan_id: str, body: ReviewRequest):
 
 @app.post(
     "/scenario/run", tags=["scenario"], summary="Run a portfolio scenario shock",
-    response_model=ScenarioRunResponse, responses={400: {"model": HTTPError}},
+    response_model=ScenarioRunResponse, responses={400: {"model": HTTPError}, 503: {"model": HTTPError}},
+    dependencies=[Depends(_require_seeded)],
 )
 def scenario_run(body: ScenarioRequest):
     """Shocks a feature (interest_rate: +/- percentage points; dti: +/-
@@ -307,7 +360,11 @@ def scenario_run(body: ScenarioRequest):
     }
 
 
-@app.get("/audit/verify", tags=["audit"], summary="Verify the hash chain", response_model=AuditVerifyResponse)
+@app.get(
+    "/audit/verify", tags=["audit"], summary="Verify the hash chain",
+    response_model=AuditVerifyResponse, responses={503: {"model": HTTPError}},
+    dependencies=[Depends(_require_seeded)],
+)
 def audit_verify():
     """Re-verifies the full SHA-256 hash chain from genesis. Returns
     {"valid": true, "n_entries": N} or {"valid": false, "broken_at_id": id,
@@ -315,7 +372,11 @@ def audit_verify():
     return AuditTrail().verify()
 
 
-@app.get("/audit/entries", tags=["audit"], summary="List every audit entry", response_model=list[AuditEntry])
+@app.get(
+    "/audit/entries", tags=["audit"], summary="List every audit entry",
+    response_model=list[AuditEntry], responses={503: {"model": HTTPError}},
+    dependencies=[Depends(_require_seeded)],
+)
 def audit_entries():
     """Every entry in the hash chain, oldest first -- the raw sequence
     verify() walks. For visualizing the chain itself (nodes, links, which

@@ -15,7 +15,11 @@ services:
     # `python -m loan_intelligence.<module>` invocation in this repo already
     # relies on (see api/main.py's own docstring and the root README).
     startCommand: python -m uvicorn loan_intelligence.api.main:app --host 0.0.0.0 --port $PORT
-    healthCheckPath: /
+    # /health returns 200 immediately, independent of the background demo-
+    # portfolio seed (bootstrap.py) -- Render's port scan and this health
+    # check both need to know the process is up, not whether seeding has
+    # finished yet (data routes report that themselves via a 503).
+    healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9

@@ -21,6 +21,9 @@ jobs:
       - name: Ping VeriTape API
         # TODO: replace with the real Render service URL once deployed
         # (Render dashboard -> the service -> the URL under its name).
+        # /health responds 200 immediately regardless of the background
+        # demo-portfolio seed (bootstrap.py) -- that's the point: this ping
+        # only needs to know the process is up, not whether seeding finished.
         run: |
-          curl -sS --max-time 30 https://veritape-api.onrender.com/ \
+          curl -sS --max-time 30 https://veritape-api.onrender.com/health \
             || echo "ping failed -- backend may be cold-starting (expected right after a spin-down) or actually down"

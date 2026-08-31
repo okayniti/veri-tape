@@ -7,11 +7,22 @@ the link right after a spin-down would land on a Portfolio Command screen
 with nothing to aggregate and an Audit Trail with zero entries -- not broken,
 just empty, but indistinguishable from broken to someone who didn't build it.
 
-seed_if_needed() is called once from api/main.py's startup hook (see the
-`lifespan` context manager there). It's cheap to call on every boot: if
-outputs/ already has real pipeline artifacts and the audit trail already has
-entries -- true for every local dev run, and every boot after the first in a
-given container's lifetime -- it does nothing and returns immediately.
+seed_if_needed() is a blocking call. api/main.py's `lifespan` startup hook
+does *not* await it directly -- Render's free tier gives this service 0.1
+CPU, and a from-scratch seed can take long enough on that little compute
+that blocking Uvicorn's own startup on it risks Render's port-scan timing
+the deploy out, even though nothing is actually broken. Instead, `lifespan`
+schedules seed_if_needed() on a background thread (`asyncio.to_thread`) and
+returns immediately, so Uvicorn binds its port and starts serving right
+away. is_ready() is the flag every data-dependent route checks before
+touching outputs/ -- False until seeding (or the no-op check that finds
+nothing to do) has actually finished, so a request that lands mid-seed gets
+a clear 503 instead of a crash or a confusingly empty response.
+
+It's cheap to call on every boot: if outputs/ already has real pipeline
+artifacts and the audit trail already has entries -- true for every local
+dev run, and every boot after the first in a given container's lifetime --
+it does nothing and flips ready almost instantly.
 
 When it does have work to do, every step below is the *same* code
 `python -m loan_intelligence.<module>` already runs locally -- this module
@@ -25,7 +36,9 @@ waiting for someone to click into one.
 from __future__ import annotations
 
 import os
+import threading
 import time
+import traceback
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -45,6 +58,38 @@ SEED_N_LOANS = int(os.environ.get("VERITAPE_SEED_N_LOANS", "1000"))
 # are seeded first (they're the interesting ones to show), then padded with
 # unflagged ones up to this count.
 SEED_AUDIT_BATCH = int(os.environ.get("VERITAPE_SEED_AUDIT_BATCH", "20"))
+
+# Readiness state for the data-dependent routes to check. A plain bool +
+# lock is enough here: exactly one background thread ever writes it (see
+# api/main.py's lifespan hook), route handlers only ever read it, and the
+# GIL already makes a single bool read atomic -- the lock just makes the
+# read/write of _ready and _error together non-torn, not because of any
+# real contention risk.
+_state_lock = threading.Lock()
+_ready = False
+_error: str | None = None
+
+
+def is_ready() -> bool:
+    """False until seeding has actually finished (or determined there was
+    nothing to do) -- checked by every data-dependent route."""
+    with _state_lock:
+        return _ready
+
+
+def seeding_error() -> str | None:
+    """None unless the background seed attempt raised; surfaced so a 503 can
+    say more than just "still seeding" if it's actually never going to finish."""
+    with _state_lock:
+        return _error
+
+
+def _mark_ready(error: str | None = None) -> None:
+    global _ready, _error
+    with _state_lock:
+        _ready = True
+        _error = error
+
 
 _REQUIRED_ARTIFACTS = [
     MODEL_DIR / "xgboost_model.json",
@@ -115,25 +160,41 @@ def _seed_audit_trail() -> None:
 
 
 def seed_if_needed() -> None:
-    """Idempotent -- safe to call on every API startup. Does real work only
-    on a genuinely empty container disk."""
-    if _is_seeded() and not _audit_trail_is_empty():
-        return
+    """Idempotent, blocking -- safe to call directly (CLI, tests) or from a
+    background thread (api/main.py's lifespan hook does the latter, via
+    asyncio.to_thread, so it never blocks Uvicorn's own startup). Does real
+    work only on a genuinely empty container disk; always flips is_ready()
+    to True on the way out, success or failure, so a route waiting on it
+    doesn't wait forever for a seed attempt that's already dead."""
+    try:
+        if _is_seeded() and not _audit_trail_is_empty():
+            _mark_ready()
+            return
 
-    started = time.monotonic()
+        started = time.monotonic()
 
-    if not _is_seeded():
-        print(f"[bootstrap] outputs/ is empty -- seeding a {SEED_N_LOANS}-loan portfolio (fresh container disk)...")
-        _run_pipeline()
-        print(f"[bootstrap] pipeline seeded in {time.monotonic() - started:.1f}s")
+        if not _is_seeded():
+            print(f"[bootstrap] outputs/ is empty -- seeding a {SEED_N_LOANS}-loan portfolio (fresh container disk)...")
+            _run_pipeline()
+            print(f"[bootstrap] pipeline seeded in {time.monotonic() - started:.1f}s")
 
-    if _audit_trail_is_empty():
-        audit_started = time.monotonic()
-        print(f"[bootstrap] audit trail is empty -- logging up to {SEED_AUDIT_BATCH} real prediction/anomaly entries...")
-        _seed_audit_trail()
-        print(f"[bootstrap] audit trail seeded in {time.monotonic() - audit_started:.1f}s")
+        if _audit_trail_is_empty():
+            audit_started = time.monotonic()
+            print(f"[bootstrap] audit trail is empty -- logging up to {SEED_AUDIT_BATCH} real prediction/anomaly entries...")
+            _seed_audit_trail()
+            print(f"[bootstrap] audit trail seeded in {time.monotonic() - audit_started:.1f}s")
 
-    print(f"[bootstrap] done in {time.monotonic() - started:.1f}s total")
+        print(f"[bootstrap] done in {time.monotonic() - started:.1f}s total")
+        _mark_ready()
+    except Exception as e:
+        # Surfaced to Render's logs and to seeding_error() rather than left
+        # to fail silently -- but still marked "ready" so the app doesn't
+        # 503 forever on every future request over a seed attempt that has
+        # already given up. Data routes will hit their own (clearer) errors
+        # reading whatever partial outputs/ state this left behind.
+        print(f"[bootstrap] seeding failed: {e}")
+        traceback.print_exc()
+        _mark_ready(error=str(e))
 
 
 if __name__ == "__main__":
