@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import AuditTrailSection from "@/components/AuditTrail";
+import CapabilitiesSplit from "@/components/CapabilitiesSplit";
 import CapabilityGrid from "@/components/CapabilityGrid";
 import CoreCapabilities from "@/components/CoreCapabilities";
 import FaqAccordion from "@/components/FaqAccordion";
@@ -54,6 +55,7 @@ export default function Home() {
         <LoanExplorer regions={regions} loanTypes={loanTypes} />
         <ScenarioSimulator />
         <AuditTrailSection />
+        <CapabilitiesSplit />
         <FaqAccordion />
         <footer className="border-t border-border px-6 py-10 text-center text-xs uppercase tracking-[0.3em] text-muted">
           VeriTape — an auditable decision layer for loan servicing
