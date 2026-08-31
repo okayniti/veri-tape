@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Loader from "@/components/Loader";
 import LoanExplorer from "@/components/LoanExplorer";
 import PortfolioCommand from "@/components/PortfolioCommand";
+import ScenarioSimulator from "@/components/ScenarioSimulator";
 import { getPortfolioSummary, type PortfolioSummary } from "@/lib/api";
 import { DURATION } from "@/lib/motion";
 
@@ -37,6 +38,7 @@ export default function Home() {
       >
         <PortfolioCommand summary={summary} error={summaryError} onRetry={loadSummary} />
         <LoanExplorer regions={regions} loanTypes={loanTypes} />
+        <ScenarioSimulator />
       </main>
     </>
   );
