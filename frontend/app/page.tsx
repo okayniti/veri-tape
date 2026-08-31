@@ -9,6 +9,7 @@ import Loader from "@/components/Loader";
 import LoanExplorer from "@/components/LoanExplorer";
 import PortfolioCommand from "@/components/PortfolioCommand";
 import ScenarioSimulator from "@/components/ScenarioSimulator";
+import SubmissionBanner from "@/components/SubmissionBanner";
 import VisualGallery from "@/components/VisualGallery";
 import { getPortfolioSummary, type PortfolioSummary } from "@/lib/api";
 import { DURATION } from "@/lib/motion";
@@ -45,6 +46,7 @@ export default function Home() {
         <CoreCapabilities />
         <CapabilityGrid />
         <VisualGallery />
+        <SubmissionBanner />
         <LoanExplorer regions={regions} loanTypes={loanTypes} />
         <ScenarioSimulator />
         <AuditTrailSection />
