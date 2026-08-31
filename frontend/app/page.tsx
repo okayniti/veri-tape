@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import AuditTrailSection from "@/components/AuditTrail";
 import Loader from "@/components/Loader";
 import LoanExplorer from "@/components/LoanExplorer";
 import PortfolioCommand from "@/components/PortfolioCommand";
@@ -39,6 +40,10 @@ export default function Home() {
         <PortfolioCommand summary={summary} error={summaryError} onRetry={loadSummary} />
         <LoanExplorer regions={regions} loanTypes={loanTypes} />
         <ScenarioSimulator />
+        <AuditTrailSection />
+        <footer className="border-t border-border px-6 py-10 text-center text-xs uppercase tracking-[0.3em] text-muted">
+          VeriTape — an auditable decision layer for loan servicing
+        </footer>
       </main>
     </>
   );
