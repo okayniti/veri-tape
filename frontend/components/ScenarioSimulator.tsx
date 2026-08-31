@@ -118,7 +118,7 @@ export default function ScenarioSimulator() {
 
       {result && (
         <Reveal delay={0.05} className="mt-12">
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+          <div data-testid="gallery-scenario" className="grid grid-cols-1 gap-6 sm:grid-cols-3">
             <div className="rounded-xl border border-border bg-background-raised p-6">
               <p className="text-xs uppercase tracking-wide text-muted">Before</p>
               <p className="mt-2 font-mono text-2xl text-foreground">

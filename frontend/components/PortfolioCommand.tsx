@@ -113,7 +113,7 @@ export default function PortfolioCommand({
           <Reveal>
             <h2 className="text-xs uppercase tracking-[0.3em] text-muted">Risk tier breakdown</h2>
           </Reveal>
-          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div data-testid="gallery-risk-tiers" className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
             {summary.risk_tier_breakdown.map((tier, i) => (
               <Reveal key={tier.tier} delay={i * 0.08}>
                 <div className="rounded-xl border border-border bg-background-raised p-6">

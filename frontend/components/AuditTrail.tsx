@@ -30,6 +30,7 @@ export default function AuditTrailSection() {
 
   const nodeRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const linkRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const pendingAnimationRef = useRef(false);
 
   const fetchEntries = useCallback(() => {
     setLoading(true);
@@ -57,40 +58,52 @@ export default function AuditTrailSection() {
 
     try {
       const [res, freshEntries] = await Promise.all([verifyAudit(), getAuditEntries()]);
+      // Entries fetched here can include rows added since this section's
+      // last render (e.g. from viewing a loan or running a scenario
+      // elsewhere on the page) -- their <li> nodes don't exist in the DOM
+      // yet, so refs for them aren't populated until React commits this
+      // state update. Flag it and let the effect below (which runs after
+      // commit) build the animation once every ref is guaranteed to exist.
+      pendingAnimationRef.current = true;
       setEntries(freshEntries);
       setVerifyResult(res);
-
-      const brokenIndex = res.valid ? -1 : freshEntries.findIndex((e) => e.id === res.broken_at_id);
-
-      const tl = gsap.timeline();
-      freshEntries.forEach((entry, i) => {
-        if (!res.valid && brokenIndex >= 0 && i > brokenIndex) return; // animation halts at the break
-
-        const isBroken = !res.valid && i === brokenIndex;
-        const link = linkRefs.current.get(entry.id);
-        const node = nodeRefs.current.get(entry.id);
-
-        if (link) {
-          tl.to(link, { backgroundColor: isBroken ? "var(--danger)" : "var(--success)", duration: 0.25 }, i * 0.12);
-        }
-        if (node) {
-          tl.to(
-            node,
-            {
-              borderColor: isBroken ? "var(--danger)" : "var(--success)",
-              boxShadow: isBroken ? "0 0 0 4px var(--shadow-danger-glow)" : "0 0 0 4px var(--shadow-success-glow)",
-              duration: 0.25,
-            },
-            i * 0.12
-          );
-        }
-      });
     } catch (e) {
       setVerifyError(e instanceof Error ? e.message : String(e));
     } finally {
       setVerifying(false);
     }
   }
+
+  useEffect(() => {
+    if (!pendingAnimationRef.current || !verifyResult || !entries) return;
+    pendingAnimationRef.current = false;
+
+    const brokenIndex = verifyResult.valid ? -1 : entries.findIndex((e) => e.id === verifyResult.broken_at_id);
+
+    const tl = gsap.timeline();
+    entries.forEach((entry, i) => {
+      if (!verifyResult.valid && brokenIndex >= 0 && i > brokenIndex) return; // animation halts at the break
+
+      const isBroken = !verifyResult.valid && i === brokenIndex;
+      const link = linkRefs.current.get(entry.id);
+      const node = nodeRefs.current.get(entry.id);
+
+      if (link) {
+        tl.to(link, { backgroundColor: isBroken ? "var(--danger)" : "var(--success)", duration: 0.25 }, i * 0.12);
+      }
+      if (node) {
+        tl.to(
+          node,
+          {
+            borderColor: isBroken ? "var(--danger)" : "var(--success)",
+            boxShadow: isBroken ? "0 0 0 4px var(--shadow-danger-glow)" : "0 0 0 4px var(--shadow-success-glow)",
+            duration: 0.25,
+          },
+          i * 0.12
+        );
+      }
+    });
+  }, [entries, verifyResult]);
 
   return (
     <section id="audit" className="mx-auto max-w-3xl px-6 py-28">
@@ -134,7 +147,7 @@ export default function AuditTrailSection() {
           <EmptyPanel message="No audit entries yet — open or review a loan in the explorer above to start the chain." />
         )}
         {!entriesError && entries && entries.length > 0 && (
-          <ol>
+          <ol data-testid="gallery-audit-chain">
             {entries.map((entry, i) => (
               <li key={entry.id}>
                 {i > 0 && (

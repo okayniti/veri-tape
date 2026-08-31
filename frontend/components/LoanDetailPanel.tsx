@@ -203,7 +203,9 @@ export default function LoanDetailPanel({
               <p className="mt-2 text-sm leading-relaxed text-foreground">{detail.reviewer_note}</p>
             </div>
 
-            <ShapBarList title="Top prediction drivers" drivers={detail.top_prediction_drivers} />
+            <div data-testid="gallery-shap">
+              <ShapBarList title="Top prediction drivers" drivers={detail.top_prediction_drivers} />
+            </div>
             {detail.top_anomaly_drivers && <ShapBarList title="Top anomaly drivers" drivers={detail.top_anomaly_drivers} />}
 
             {detail.is_flagged ? (
