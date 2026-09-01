@@ -91,25 +91,30 @@ app = FastAPI(
 )
 
 # Local dev (Next.js default port, and 3001 when 3000 is already taken) plus
-# the deployed Vercel frontend. TODO: replace with the real Vercel URL once
-# the project is deployed there (or set via a VERCEL_ORIGIN env var if it
-# changes often) -- until then this placeholder keeps the deployed frontend
-# broken-but-obvious rather than silently allowed via a wildcard.
+# the deployed Vercel frontend at https://veri-tape.vercel.app -- note the
+# hyphen: the Vercel project is named "veri-tape", not "veritape". (An
+# earlier pass used the no-hyphen placeholder before the real URL was known;
+# that mismatch is exactly what made the deployed frontend see "Could not
+# reach the API" even though the backend itself was healthy -- the browser's
+# preflight was being rejected before any route logic ran.)
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:3001",
     "http://127.0.0.1:3001",
-    "https://veritape.vercel.app",
+    "https://veri-tape.vercel.app",
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     # Vercel gives every branch/PR preview build its own subdomain
-    # (veritape-<hash>-<team>.vercel.app); this covers those without
+    # (veri-tape-<hash>-<team>.vercel.app); this covers those without
     # reopening the wildcard the explicit list above deliberately avoids.
-    allow_origin_regex=r"https://veritape.*\.vercel\.app",
+    # Matches on "veri-tape" (with the hyphen) -- the old placeholder-based
+    # regex required the literal substring "veritape" with no hyphen, which
+    # a real "veri-tape-git-branch.vercel.app" preview URL never contains.
+    allow_origin_regex=r"https://veri-tape.*\.vercel\.app",
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
